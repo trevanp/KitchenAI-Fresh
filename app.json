@@ -24,6 +24,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you scan receipt images.",
+          "cameraPermission": "The app accesses your camera to let you take receipt photos."
+        }
+      ]
+    ]
   }
 }
