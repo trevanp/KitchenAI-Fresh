@@ -9,6 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
 const { width } = Dimensions.get('window');
 
@@ -17,14 +18,18 @@ const { width } = Dimensions.get('window');
 // Colors
 export const COLORS = {
   // Primary Colors
-  primary: '#DC3545',           // Red - main brand color
-  primaryLight: '#FF6B7A',      // Lighter red for hover states
-  primaryDark: '#B02A37',       // Darker red for pressed states
+  primary: '#DC2626',           // Red - main brand color (standardized)
+  primaryLight: '#F87171',      // Lighter red for hover states
+  primaryDark: '#991B1B',       // Darker red for pressed states
   
   // Secondary Colors
-  secondary: '#2196F3',         // Blue - for active states
-  secondaryLight: '#E3F2FD',    // Light blue background
-  secondaryDark: '#1976D2',     // Dark blue text
+  secondary: '#DC2626',         // Use same red for active tab, no blue
+  secondaryLight: '#FEF2F2',    // Light red background
+  secondaryDark: '#991B1B',     // Dark red text
+  
+  // Gradient Colors
+  gradientStart: '#FFF5F3',     // Very light red for gradient start
+  gradientEnd: '#FFFFFF',       // White for gradient end
   
   // Neutral Colors
   white: '#FFFFFF',
@@ -41,15 +46,15 @@ export const COLORS = {
   borderLight: '#F1F3F4',       // Very light borders
   
   // Status Colors
-  success: '#28A745',           // Green
-  warning: '#FFC107',           // Yellow
-  error: '#DC3545',             // Red
-  info: '#17A2B8',              // Blue
+  success: '#22C55E',           // Vibrant green
+  warning: '#FBBF24',           // Yellow/Orange
+  error: '#EF4444',             // Strong red for urgent
+  info: '#17A2B8',              // Blue (for info only)
   
   // Overlay Colors
   overlay: 'rgba(0,0,0,0.7)',   // Dark overlay
-  successOverlay: 'rgba(40, 167, 69, 0.9)',  // Green overlay
-  warningOverlay: 'rgba(255, 193, 7, 0.9)',  // Yellow overlay
+  successOverlay: 'rgba(34, 197, 94, 0.9)',  // Green overlay
+  warningOverlay: 'rgba(251, 191, 36, 0.9)', // Yellow overlay
 };
 
 // Typography
@@ -167,8 +172,13 @@ export const SHADOWS = {
 // ===== SHARED COMPONENTS =====
 
 // Header Component
-export const Header = ({ title, subtitle, rightAction }) => (
+export const Header = ({ title, subtitle, rightAction, leftAction }) => (
   <View style={styles.header}>
+    {leftAction && (
+      <View style={styles.headerLeftAction}>
+        {leftAction}
+      </View>
+    )}
     <View style={styles.headerContent}>
       <Text style={styles.headerTitle}>{title}</Text>
       {subtitle && <Text style={styles.headerSubtitle}>{subtitle}</Text>}
@@ -246,6 +256,36 @@ export const Card = ({ children, style }) => (
   </View>
 );
 
+// AnimatedButton Component
+export const AnimatedButton = ({
+  children,
+  onPress,
+  style,
+  disabled = false,
+  ...props
+}) => {
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: disabled ? 0.6 : 1,
+  }));
+  return (
+    <Animated.View style={[animatedStyle, style]}>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        disabled={disabled}
+        onPressIn={() => { scale.value = withSpring(0.95); }}
+        onPressOut={() => { scale.value = withSpring(1); }}
+        onPress={onPress}
+        style={{ minHeight: 44, justifyContent: 'center' }}
+        {...props}
+      >
+        {children}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
 // Button Component
 export const Button = ({ 
   title, 
@@ -272,14 +312,10 @@ export const Button = ({
   ];
 
   return (
-    <TouchableOpacity
-      style={buttonStyles}
-      onPress={onPress}
-      disabled={disabled}
-    >
+    <AnimatedButton onPress={onPress} style={buttonStyles} disabled={disabled}>
       {icon && <Ionicons name={icon} size={16} color={COLORS.white} style={styles.buttonIcon} />}
       <Text style={textStyles}>{title}</Text>
-    </TouchableOpacity>
+    </AnimatedButton>
   );
 };
 
@@ -358,6 +394,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  headerLeftAction: {
+    marginRight: SPACING.lg,
   },
   headerContent: {
     flex: 1,

@@ -1,61 +1,244 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  Image,
+  ScrollView,
+  Alert,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { COLORS, SHADOWS } from '../components/DesignSystem';
+import { usePantry } from '../PantryContext';
 
-export default function ProfileScreen() {
+const user = {
+  name: 'Jane Doe',
+  email: 'jane.doe@example.com',
+  bio: 'Food enthusiast and home cook. I love trying new recipes and experimenting with different cuisines.',
+  dietary: 'Vegetarian',
+  profilePic: null, // Placeholder
+};
+
+export default function ProfileScreen({ navigation }) {
+  const { quizCompleted, quizData } = usePantry();
+  const [user] = useState({
+    name: 'Kitchen Explorer',
+    email: 'user@example.com',
+    profilePic: null,
+    joinDate: 'January 2024',
+    recipesCreated: 12,
+    recipesCooked: 47,
+    favoriteCuisine: 'Italian',
+  });
+
+  const handlePantryQuiz = () => {
+    navigation.navigate('PantryQuiz');
+  };
+
+  const handleEditProfile = () => {
+    Alert.alert('Edit Profile', 'Profile editing feature coming soon!');
+  };
+
+  const handleSettings = () => {
+    Alert.alert('Settings', 'Settings feature coming soon!');
+  };
+
+  const handleHelp = () => {
+    Alert.alert('Help & Support', 'Help and support feature coming soon!');
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Logout', style: 'destructive' }
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Profile</Text>
-        <Text style={styles.subtitle}>Your personal settings</Text>
-      </View>
-      
-      <View style={styles.content}>
-        <Text style={styles.welcome}>👤 Your Profile</Text>
-        <Text style={styles.description}>
-          Manage your preferences, dietary restrictions, cooking skill level, and account settings.
-        </Text>
-      </View>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Profile</Text>
+        </View>
+
+        {/* Profile Card */}
+        <View style={styles.profileCard}>
+          <View style={styles.profileImageContainer}>
+            {user.profilePic ? (
+              <Image source={{ uri: user.profilePic }} style={styles.profilePic} />
+            ) : (
+              <View style={styles.profilePicPlaceholder}>
+                <Ionicons name="person" size={40} color={COLORS.primary} />
+              </View>
+            )}
+          </View>
+          
+          <Text style={styles.userName}>{user.name}</Text>
+          <Text style={styles.userEmail}>{user.email}</Text>
+          <Text style={styles.joinDate}>Member since {user.joinDate}</Text>
+          
+          <TouchableOpacity style={styles.editProfileButton} onPress={handleEditProfile}>
+            <Ionicons name="create-outline" size={16} color={COLORS.primary} />
+            <Text style={styles.editProfileText}>Edit Profile</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Stats Card */}
+        <View style={styles.statsCard}>
+          <Text style={styles.statsTitle}>Your Activity</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{user.recipesCreated}</Text>
+              <Text style={styles.statLabel}>Recipes Created</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{user.recipesCooked}</Text>
+              <Text style={styles.statLabel}>Recipes Cooked</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{user.favoriteCuisine}</Text>
+              <Text style={styles.statLabel}>Favorite Cuisine</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Pantry Quiz Card */}
+        <View style={styles.quizCard}>
+          <View style={styles.quizHeader}>
+            <Ionicons 
+              name={quizCompleted ? "checkmark-circle" : "bulb-outline"} 
+              size={24} 
+              color={quizCompleted ? "#10B981" : COLORS.primary} 
+            />
+            <Text style={styles.quizTitle}>
+              {quizCompleted ? 'Pantry Analysis Complete' : 'Smart Pantry Discovery'}
+            </Text>
+          </View>
+          <Text style={styles.quizDescription}>
+            {quizCompleted 
+              ? `Quiz completed on ${new Date(quizData?.completedAt).toLocaleDateString()}. Your pantry is now optimized for better recipe suggestions!`
+              : 'Take a quick quiz to help us understand what you already have in your kitchen. This will make recipe suggestions much more accurate!'
+            }
+          </Text>
+          <TouchableOpacity 
+            style={[styles.quizButton, quizCompleted && styles.quizButtonCompleted]} 
+            onPress={handlePantryQuiz}
+          >
+            <Ionicons 
+              name={quizCompleted ? "refresh" : "play"} 
+              size={20} 
+              color={COLORS.white} 
+            />
+            <Text style={styles.quizButtonText}>
+              {quizCompleted ? 'Retake Quiz' : 'Start Pantry Quiz'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Menu Options */}
+        <View style={styles.menuSection}>
+          <TouchableOpacity style={styles.menuItem} onPress={handleSettings}>
+            <Ionicons name="settings-outline" size={24} color={COLORS.textPrimary} />
+            <Text style={styles.menuItemText}>Settings</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.menuItem} onPress={handleHelp}>
+            <Ionicons name="help-circle-outline" size={24} color={COLORS.textPrimary} />
+            <Text style={styles.menuItemText}>Help & Support</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={24} color="#EF4444" />
+            <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Logout</Text>
+            <Ionicons name="chevron-forward" size={20} color="#EF4444" />
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  header: {
-    backgroundColor: '#2563eb',
+  container: { flex: 1, backgroundColor: COLORS.white },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 24, marginBottom: 10, position: 'relative' },
+  headerTitle: { fontSize: 30, fontWeight: 'bold', color: COLORS.textPrimary, textAlign: 'center' },
+  profileCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
     padding: 20,
+    marginHorizontal: 24,
+    marginBottom: 28,
+    ...SHADOWS.default,
+  },
+  profileImageContainer: { alignItems: 'center', marginBottom: 18 },
+  profilePic: { width: 110, height: 110, borderRadius: 55, backgroundColor: COLORS.background },
+  profilePicPlaceholder: { width: 110, height: 110, borderRadius: 55, backgroundColor: COLORS.background, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border },
+  userName: { fontSize: 22, fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: 2 },
+  userEmail: { fontSize: 15, color: COLORS.textSecondary },
+  joinDate: { fontSize: 15, color: COLORS.textSecondary },
+  editProfileButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 5,
+    padding: 10,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  editProfileText: { fontSize: 15, fontWeight: 'bold', color: COLORS.white },
+  statsCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
+    padding: 20,
+    marginHorizontal: 24,
+    marginBottom: 28,
+    ...SHADOWS.default,
+  },
+  statsTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: 6, textAlign: 'left' },
+  statsGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  statItem: { alignItems: 'center' },
+  statNumber: { fontSize: 18, fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: 2 },
+  statLabel: { fontSize: 15, color: COLORS.textSecondary },
+  quizCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
+    padding: 20,
+    marginHorizontal: 24,
+    marginBottom: 28,
+    ...SHADOWS.default,
+  },
+  quizHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  quizTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.textPrimary, marginLeft: 10 },
+  quizDescription: { fontSize: 15, color: COLORS.textSecondary, marginBottom: 10 },
+  quizButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 5,
+    padding: 10,
     alignItems: 'center',
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#bfdbfe',
-    marginTop: 5,
-  },
-  content: {
-    flex: 1,
+  quizButtonText: { fontSize: 15, fontWeight: 'bold', color: COLORS.white },
+  quizButtonCompleted: { backgroundColor: '#10B981' },
+  menuSection: {
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
     padding: 20,
-    justifyContent: 'center',
+    marginHorizontal: 24,
+    marginBottom: 28,
+    ...SHADOWS.default,
+  },
+  menuItem: {
+    flexDirection: 'row',
     alignItems: 'center',
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  welcome: {
-    fontSize: 24,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 20,
-    color: '#1f2937',
-  },
-  description: {
-    fontSize: 16,
-    textAlign: 'center',
-    color: '#6b7280',
-    lineHeight: 24,
-  },
+  menuItemText: { fontSize: 15, color: COLORS.textPrimary, marginLeft: 10 },
 }); 

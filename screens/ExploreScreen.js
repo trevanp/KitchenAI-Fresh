@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -7,461 +8,580 @@ import {
   TouchableOpacity,
   Image,
   TextInput,
+  Dimensions,
+  Modal,
+  Animated,
   ActivityIndicator,
   Alert,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
-  Header,
-  SearchBar,
-  FilterButton,
-  FilterRow,
-  LoadingState,
-  EmptyState,
-  Button,
-  Badge,
-  MetaItem,
   COLORS,
   TYPOGRAPHY,
   SPACING,
   BORDER_RADIUS,
   SHADOWS,
+  Badge,
+  Card,
 } from '../components/DesignSystem';
+import { 
+  searchRecipesByIngredients, 
+  isApiKeyConfigured,
+  getApiStatus 
+} from '../services/spoonacularService';
 
 const { width } = Dimensions.get('window');
 
-// Spoonacular API configuration
-const SPOONACULAR_API_KEY = '19f66e9e585f4e70b8d7b6e58af8d12b'; // Real API key
-const SPOONACULAR_BASE_URL = 'https://api.spoonacular.com/recipes';
+// No dummy data - all recipes will come from Spoonacular API
 
-// Mock pantry data for testing (matches receipt scanning structure)
-const mockPantryItems = [
-  { name: 'Whole Milk', quantity: '1 gallon', category: 'Dairy & Eggs' },
-  { name: 'Bread', quantity: '1 loaf', category: 'Pantry Staples' },
-  { name: 'Bananas', quantity: '1 bunch', category: 'Produce' },
-  { name: 'Eggs', quantity: '1 dozen', category: 'Dairy & Eggs' },
-  { name: 'Chicken Breast', quantity: '2 lbs', category: 'Meat & Seafood' },
-  { name: 'Orange Juice', quantity: '1/2 gallon', category: 'Beverages' },
-  { name: 'Crackers', quantity: '1 box', category: 'Snacks' },
-  { name: 'Cheese', quantity: '1 block', category: 'Dairy & Eggs' },
-  { name: 'Tomatoes', quantity: '4 pieces', category: 'Produce' },
-  { name: 'Rice', quantity: '2 cups', category: 'Pantry Staples' },
+// Available ingredients for selection
+const availableIngredients = [
+  { id: 1, name: 'Chicken', icon: '🍗' },
+  { id: 2, name: 'Broccoli', icon: '🥦' },
+  { id: 3, name: 'Garlic', icon: '🧄' },
+  { id: 4, name: 'Onion', icon: '🧅' },
+  { id: 5, name: 'Tomato', icon: '🍅' },
+  { id: 6, name: 'Rice', icon: '🍚' },
+  { id: 7, name: 'Pasta', icon: '🍝' },
+  { id: 8, name: 'Beef', icon: '🥩' },
+  { id: 9, name: 'Salmon', icon: '🐟' },
+  { id: 10, name: 'Eggs', icon: '🥚' },
+  { id: 11, name: 'Milk', icon: '🥛' },
+  { id: 12, name: 'Cheese', icon: '🧀' },
+  { id: 13, name: 'Potato', icon: '🥔' },
+  { id: 14, name: 'Carrot', icon: '🥕' },
+  { id: 15, name: 'Spinach', icon: '🥬' },
 ];
 
-// Mock recipe data for testing (when API key is not available)
-const mockRecipes = {
-  'Can Make Now': [
-    {
-      id: 1,
-      title: 'Scrambled Eggs with Toast',
-      image: 'https://spoonacular.com/recipeImages/1-556x370.jpg',
-      usedIngredients: ['Eggs', 'Bread', 'Cheese'],
-      missedIngredients: [],
-      likes: 1250,
-      readyInMinutes: 10,
-      servings: 2,
-      difficulty: 'Easy',
-    },
-    {
-      id: 2,
-      title: 'Banana Smoothie',
-      image: 'https://spoonacular.com/recipeImages/2-556x370.jpg',
-      usedIngredients: ['Bananas', 'Whole Milk'],
-      missedIngredients: [],
-      likes: 890,
-      readyInMinutes: 5,
-      servings: 2,
-      difficulty: 'Easy',
-    },
-    {
-      id: 3,
-      title: 'Grilled Cheese Sandwich',
-      image: 'https://spoonacular.com/recipeImages/3-556x370.jpg',
-      usedIngredients: ['Bread', 'Cheese', 'Butter'],
-      missedIngredients: [],
-      likes: 2100,
-      readyInMinutes: 8,
-      servings: 2,
-      difficulty: 'Easy',
-    },
-    {
-      id: 4,
-      title: 'Tomato and Cheese Toast',
-      image: 'https://spoonacular.com/recipeImages/4-556x370.jpg',
-      usedIngredients: ['Bread', 'Cheese', 'Tomatoes'],
-      missedIngredients: [],
-      likes: 650,
-      readyInMinutes: 7,
-      servings: 2,
-      difficulty: 'Easy',
-    },
-  ],
-  'Almost There': [
-    {
-      id: 5,
-      title: 'Chicken Fried Rice',
-      image: 'https://spoonacular.com/recipeImages/5-556x370.jpg',
-      usedIngredients: ['Chicken Breast', 'Rice', 'Eggs'],
-      missedIngredients: ['Soy Sauce', 'Vegetables'],
-      likes: 1800,
-      readyInMinutes: 25,
-      servings: 4,
-      difficulty: 'Medium',
-    },
-    {
-      id: 6,
-      title: 'Banana Bread',
-      image: 'https://spoonacular.com/recipeImages/6-556x370.jpg',
-      usedIngredients: ['Bananas', 'Bread', 'Eggs'],
-      missedIngredients: ['Flour', 'Sugar', 'Butter'],
-      likes: 3200,
-      readyInMinutes: 60,
-      servings: 8,
-      difficulty: 'Medium',
-    },
-    {
-      id: 7,
-      title: 'Chicken Pasta',
-      image: 'https://spoonacular.com/recipeImages/7-556x370.jpg',
-      usedIngredients: ['Chicken Breast', 'Cheese', 'Tomatoes'],
-      missedIngredients: ['Pasta', 'Olive Oil'],
-      likes: 1500,
-      readyInMinutes: 30,
-      servings: 4,
-      difficulty: 'Medium',
-    },
-    {
-      id: 8,
-      title: 'Orange Juice Smoothie',
-      image: 'https://spoonacular.com/recipeImages/8-556x370.jpg',
-      usedIngredients: ['Orange Juice', 'Bananas'],
-      missedIngredients: ['Yogurt', 'Honey'],
-      likes: 750,
-      readyInMinutes: 5,
-      servings: 2,
-      difficulty: 'Easy',
-    },
-  ],
-};
+// Filter options
+const mealTypes = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Dessert'];
+const timeCategories = [
+  { label: 'Quick (under 15 min)', value: 'Quick' },
+  { label: 'Medium (15-30 min)', value: 'Medium' },
+  { label: 'Long (30+ min)', value: 'Long' },
+];
 
-export default function ExploreScreen() {
-  const [recipes, setRecipes] = useState({ 'Can Make Now': [], 'Almost There': [] });
-  const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState('All');
-  const [savedRecipes, setSavedRecipes] = useState([]);
-  const [pantryItems, setPantryItems] = useState(mockPantryItems);
+export default function ExploreScreen({ navigation, pantryItems = [] }) {
+  const [search, setSearch] = useState('');
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [selectedMealTypes, setSelectedMealTypes] = useState([]);
+  const [selectedTimeCategories, setSelectedTimeCategories] = useState([]);
+  
+  // API and recipe state
+  const [selectedIngredients, setSelectedIngredients] = useState([]);
+  const [cookNowRecipes, setCookNowRecipes] = useState([]);
+  const [almostThereRecipes, setAlmostThereRecipes] = useState([]);
+  const [discoverRecipes, setDiscoverRecipes] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState(null);
 
-  const filters = ['All', 'Breakfast', 'Lunch', 'Dinner', 'Snacks'];
+  // Calculate active filter count
+  const activeFilterCount = selectedMealTypes.length + selectedTimeCategories.length;
 
-  useEffect(() => {
-    loadRecipes();
-  }, []);
-
-  const loadRecipes = async () => {
-    setLoading(true);
-    try {
-      // Use mock data by default to show UI improvements
-      console.log('Using mock recipe data to show UI improvements');
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate loading
-      setRecipes(mockRecipes);
-      
-      // Uncomment the line below to try real API instead
-      // await fetchRecipesFromAPI();
-    } catch (error) {
-      console.error('Error loading recipes:', error);
-      console.log('Falling back to mock recipe data');
-      // Fallback to mock data on error
-      setRecipes(mockRecipes);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchRecipesFromAPI = async () => {
-    try {
-      console.log('🔍 Starting API call to Spoonacular...');
-      // Get ingredient names from pantry
-      const ingredients = pantryItems.map(item => item.name).join(',');
-      console.log('🔍 Ingredients being searched:', ingredients);
-      
-      const apiUrl = `${SPOONACULAR_BASE_URL}/findByIngredients?apiKey=${SPOONACULAR_API_KEY}&ingredients=${ingredients}&number=20&ranking=2`;
-      console.log('🔍 API URL:', apiUrl);
-      
-      // Fetch recipes by ingredients
-      const response = await fetch(apiUrl);
-      
-      console.log('🔍 API Response status:', response.status);
-      console.log('🔍 API Response ok:', response.ok);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('🔍 API Error response:', errorText);
-        throw new Error(`API request failed: ${response.status} ${errorText}`);
-      }
-      
-      const data = await response.json();
-      console.log('🔍 API Response data length:', data.length);
-      console.log('🔍 First recipe:', data[0]);
-      
-      // Process and categorize recipes
-      const processedRecipes = processAPIResults(data);
-      console.log('🔍 Processed recipes:', processedRecipes);
-      setRecipes(processedRecipes);
-      
-    } catch (error) {
-      console.error('🔍 API Error:', error);
-      throw error;
-    }
-  };
-
-  const processAPIResults = (apiData) => {
-    const canMakeNow = [];
-    const almostThere = [];
-
-    apiData.forEach(recipe => {
-      const usedCount = recipe.usedIngredientCount || 0;
-      const missedCount = recipe.missedIngredientCount || 0;
-
-      if (missedCount === 0 && usedCount >= 2) {
-        canMakeNow.push({
-          id: recipe.id,
-          title: recipe.title,
-          image: recipe.image,
-          usedIngredients: recipe.usedIngredients?.map(ing => ing.name) || [],
-          missedIngredients: recipe.missedIngredients?.map(ing => ing.name) || [],
-          likes: recipe.likes || 0,
-          readyInMinutes: recipe.readyInMinutes || 30,
-          servings: recipe.servings || 2,
-          difficulty: getDifficulty(recipe.readyInMinutes || 30),
-        });
-      } else if (missedCount <= 2 && usedCount >= 1) {
-        almostThere.push({
-          id: recipe.id,
-          title: recipe.title,
-          image: recipe.image,
-          usedIngredients: recipe.usedIngredients?.map(ing => ing.name) || [],
-          missedIngredients: recipe.missedIngredients?.map(ing => ing.name) || [],
-          likes: recipe.likes || 0,
-          readyInMinutes: recipe.readyInMinutes || 30,
-          servings: recipe.servings || 2,
-          difficulty: getDifficulty(recipe.readyInMinutes || 30),
-        });
-      }
-    });
-
-    return { 'Can Make Now': canMakeNow, 'Almost There': almostThere };
-  };
-
-  const getDifficulty = (cookTime) => {
-    if (cookTime <= 15) return 'Easy';
-    if (cookTime <= 45) return 'Medium';
-    return 'Hard';
-  };
-
-  const toggleSaveRecipe = (recipeId) => {
-    const isCurrentlySaved = savedRecipes.some(saved => saved.id === recipeId);
+  // Filter recipes based on selected filters
+  const filterRecipes = (recipes) => {
+    if (activeFilterCount === 0) return recipes;
     
-    if (isCurrentlySaved) {
-      // Remove from saved recipes
-      setSavedRecipes(prev => prev.filter(saved => saved.id !== recipeId));
-      Alert.alert('Recipe Removed', 'Recipe removed from your cookbook');
-    } else {
-      // Add to saved recipes
-      setSavedRecipes(prev => [...prev, { id: recipeId }]);
-      Alert.alert('Recipe Saved!', 'Recipe added to your cookbook');
-    }
-  };
-
-  const filterRecipes = (recipeList) => {
-    if (selectedFilter === 'All') return recipeList;
-    
-    // Simple keyword-based filtering for mock data
-    return recipeList.filter(recipe => {
-      const title = recipe.title.toLowerCase();
-      switch (selectedFilter) {
-        case 'Breakfast':
-          return title.includes('breakfast') || title.includes('eggs') || title.includes('smoothie') || title.includes('toast');
-        case 'Lunch':
-          return title.includes('lunch') || title.includes('sandwich') || title.includes('salad');
-        case 'Dinner':
-          return title.includes('dinner') || title.includes('chicken') || title.includes('rice') || title.includes('pasta');
-        case 'Snacks':
-          return title.includes('snack') || title.includes('bread') || title.includes('cracker');
-        default:
-          return true;
-      }
+    return recipes.filter(recipe => {
+      const mealTypeMatch = selectedMealTypes.length === 0 || selectedMealTypes.includes(recipe.mealType);
+      const timeMatch = selectedTimeCategories.length === 0 || selectedTimeCategories.includes(recipe.timeCategory);
+      return mealTypeMatch && timeMatch;
     });
   };
 
-  const searchRecipes = (recipeList) => {
-    if (!searchQuery.trim()) return recipeList;
-    
-    return recipeList.filter(recipe =>
-      recipe.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      recipe.usedIngredients.some(ing => ing.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      recipe.missedIngredients.some(ing => ing.toLowerCase().includes(searchQuery.toLowerCase()))
+  const toggleMealType = (mealType) => {
+    setSelectedMealTypes(prev => 
+      prev.includes(mealType) 
+        ? prev.filter(type => type !== mealType)
+        : [...prev, mealType]
     );
   };
 
-  const RecipeCard = ({ recipe, category }) => {
-    const isSaved = savedRecipes.some(saved => saved.id === recipe.id);
+  const toggleTimeCategory = (timeCategory) => {
+    setSelectedTimeCategories(prev => 
+      prev.includes(timeCategory) 
+        ? prev.filter(time => time !== timeCategory)
+        : [...prev, timeCategory]
+    );
+  };
+
+  const clearAllFilters = () => {
+    setSelectedMealTypes([]);
+    setSelectedTimeCategories([]);
+  };
+
+  const applyFilters = () => {
+    setShowFilterModal(false);
+  };
+
+  // API Integration Functions
+  const searchRecipes = async () => {
+    if (!isApiKeyConfigured()) {
+      Alert.alert(
+        'API Key Required',
+        'Please configure your Spoonacular API key in the .env file to search for recipes.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    if (selectedIngredients.length === 0) {
+      setCookNowRecipes([]);
+      setAlmostThereRecipes([]);
+      setDiscoverRecipes([]);
+      return;
+    }
+
+    setIsLoading(true);
+    setApiError(null);
+
+    try {
+      const ingredientNames = selectedIngredients.map(ing => ing.name);
+      console.log('🔍 Searching recipes with ingredients:', ingredientNames);
+      console.log('📊 Total ingredients:', ingredientNames.length);
+      
+      const recipes = await searchRecipesByIngredients(ingredientNames, {
+        number: 20,
+        ranking: 1,
+        ignorePantry: false,
+      });
+
+      console.log('📋 API returned recipes:', recipes.length);
+      console.log('🍳 Sample recipe:', recipes[0]);
+
+      // Separate recipes into categories based on missing ingredients
+      const cookNow = recipes.filter(recipe => recipe.missedIngredientCount <= 1); // 0-1 missing ingredients
+      const almostThere = recipes.filter(recipe => recipe.missedIngredientCount >= 2 && recipe.missedIngredientCount <= 3); // 2-3 missing ingredients
+      const discover = recipes.filter(recipe => recipe.missedIngredientCount > 3); // 4+ missing ingredients (trending/popular)
+
+      console.log('✅ Cook Now recipes:', cookNow.length);
+      console.log('🟡 Almost There recipes:', almostThere.length);
+      console.log('🔍 Discover recipes:', discover.length);
+
+      setCookNowRecipes(cookNow);
+      setAlmostThereRecipes(almostThere);
+      setDiscoverRecipes(discover);
+
+    } catch (error) {
+      console.error('❌ Error searching recipes:', error);
+      console.error('❌ Error details:', error.message);
+      setApiError(error.message);
+      
+      // More specific error handling
+      if (error.message.includes('API key')) {
+        Alert.alert(
+          'API Key Error',
+          'Invalid or missing Spoonacular API key. Please check your configuration.',
+          [{ text: 'OK' }]
+        );
+      } else if (error.message.includes('network')) {
+        Alert.alert(
+          'Network Error',
+          'Unable to connect to recipe service. Please check your internet connection.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Search Error',
+          'Failed to search for recipes. Please try again.',
+          [{ text: 'OK' }]
+        );
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Convert pantry items to ingredients and auto-populate
+  const convertPantryToIngredients = (pantryItems) => {
+    return pantryItems.map(item => ({
+      id: item.id,
+      name: normalizeIngredientName(item.name),
+      icon: getIngredientIcon(item.name),
+      fromPantry: true,
+      category: item.category
+    }));
+  };
+
+  // Normalize ingredient names for Spoonacular API compatibility
+  const normalizeIngredientName = (name) => {
+    const lowerName = name.toLowerCase().trim();
     
-    const handleSaveRecipe = () => {
-      toggleSaveRecipe(recipe.id);
+    // Common ingredient mappings for better API results
+    const ingredientMappings = {
+      'onion': 'onion',
+      'white onion': 'onion',
+      'yellow onion': 'onion',
+      'red onion': 'onion',
+      'garlic': 'garlic',
+      'garlic cloves': 'garlic',
+      'chicken': 'chicken',
+      'chicken breast': 'chicken breast',
+      'chicken thighs': 'chicken',
+      'beef': 'beef',
+      'ground beef': 'ground beef',
+      'pork': 'pork',
+      'salmon': 'salmon',
+      'fish': 'fish',
+      'milk': 'milk',
+      'whole milk': 'milk',
+      'skim milk': 'milk',
+      'cheese': 'cheese',
+      'cheddar cheese': 'cheese',
+      'eggs': 'eggs',
+      'egg': 'eggs',
+      'flour': 'flour',
+      'all purpose flour': 'flour',
+      'bread flour': 'flour',
+      'rice': 'rice',
+      'white rice': 'rice',
+      'brown rice': 'rice',
+      'pasta': 'pasta',
+      'spaghetti': 'pasta',
+      'tomato': 'tomato',
+      'tomatoes': 'tomato',
+      'potato': 'potato',
+      'potatoes': 'potato',
+      'carrot': 'carrot',
+      'carrots': 'carrot',
+      'broccoli': 'broccoli',
+      'spinach': 'spinach',
+      'lettuce': 'lettuce',
+      'apple': 'apple',
+      'apples': 'apple',
+      'banana': 'banana',
+      'bananas': 'banana',
+      'olive oil': 'olive oil',
+      'vegetable oil': 'vegetable oil',
+      'butter': 'butter',
+      'salt': 'salt',
+      'pepper': 'pepper',
+      'black pepper': 'pepper',
+      'sugar': 'sugar',
+      'brown sugar': 'sugar',
+      'honey': 'honey',
+      'bread': 'bread',
+      'tortilla': 'tortilla',
+      'tortillas': 'tortilla',
+      'tortilla chips': 'tortilla chips',
+      'chips': 'tortilla chips',
     };
 
-    return (
-      <View style={styles.recipeCard}>
-        <View style={styles.recipeImageContainer}>
-          <Image source={{ uri: recipe.image }} style={styles.recipeImage} />
-          <TouchableOpacity
-            style={styles.saveButton}
-            onPress={handleSaveRecipe}
-          >
-            <Ionicons
-              name={isSaved ? 'heart' : 'heart-outline'}
-              size={20}
-              color={isSaved ? COLORS.primary : COLORS.white}
-            />
-          </TouchableOpacity>
-          <View style={styles.recipeBadge}>
-            <Badge
-              label={category === 'Can Make Now' ? 'Ready' : 'Almost'}
-              variant={category === 'Can Make Now' ? 'success' : 'warning'}
-              size="small"
-            />
+    // Check for exact matches first
+    if (ingredientMappings[lowerName]) {
+      return ingredientMappings[lowerName];
+    }
+
+    // Check for partial matches
+    for (const [key, value] of Object.entries(ingredientMappings)) {
+      if (lowerName.includes(key) || key.includes(lowerName)) {
+        return value;
+      }
+    }
+
+    // Return original name if no mapping found
+    return name.toLowerCase().trim();
+  };
+
+  // Get appropriate icon for ingredient based on name
+  const getIngredientIcon = (name) => {
+    const lowerName = name.toLowerCase();
+    
+    // Produce
+    if (lowerName.includes('apple') || lowerName.includes('banana') || lowerName.includes('orange')) return '🍎';
+    if (lowerName.includes('tomato')) return '🍅';
+    if (lowerName.includes('lettuce') || lowerName.includes('spinach')) return '🥬';
+    if (lowerName.includes('carrot')) return '🥕';
+    if (lowerName.includes('onion')) return '🧅';
+    if (lowerName.includes('garlic')) return '🧄';
+    if (lowerName.includes('potato')) return '🥔';
+    if (lowerName.includes('broccoli')) return '🥦';
+    if (lowerName.includes('cucumber')) return '🥒';
+    
+    // Proteins
+    if (lowerName.includes('chicken')) return '🍗';
+    if (lowerName.includes('beef') || lowerName.includes('steak')) return '🥩';
+    if (lowerName.includes('fish') || lowerName.includes('salmon')) return '🐟';
+    if (lowerName.includes('egg')) return '🥚';
+    if (lowerName.includes('tofu')) return '🧈';
+    
+    // Dairy
+    if (lowerName.includes('milk')) return '🥛';
+    if (lowerName.includes('cheese')) return '🧀';
+    if (lowerName.includes('yogurt')) return '🥛';
+    if (lowerName.includes('butter')) return '🧈';
+    
+    // Grains
+    if (lowerName.includes('rice')) return '🍚';
+    if (lowerName.includes('pasta')) return '🍝';
+    if (lowerName.includes('bread')) return '🍞';
+    if (lowerName.includes('flour')) return '🌾';
+    
+    // Default
+    return '🥘';
+  };
+
+  // Auto-populate ingredients from pantry when pantry changes
+  useEffect(() => {
+    if (pantryItems.length > 0) {
+      const pantryIngredients = convertPantryToIngredients(pantryItems);
+      setSelectedIngredients(pantryIngredients);
+    } else {
+      // Fallback to manual selection if no pantry items
+      setSelectedIngredients([]);
+    }
+  }, [pantryItems]);
+
+  // Refresh when screen comes into focus (e.g., returning from Pantry)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (pantryItems.length > 0) {
+        const pantryIngredients = convertPantryToIngredients(pantryItems);
+        setSelectedIngredients(pantryIngredients);
+      }
+    }, [pantryItems])
+  );
+
+  // Search recipes when ingredients change
+  useEffect(() => {
+    searchRecipes();
+  }, [selectedIngredients]);
+
+
+
+  const renderRecipeCard = (recipe) => (
+    <TouchableOpacity 
+      key={recipe.id} 
+      style={styles.recipeCard}
+      onPress={() => navigation.navigate('RecipeDetail', {
+        recipeId: recipe.id,
+        recipeTitle: recipe.title,
+        recipeImage: recipe.image,
+        selectedIngredients: selectedIngredients,
+      })}
+      activeOpacity={0.8}
+    >
+      <Image source={{ uri: recipe.image }} style={styles.recipeImage} />
+      <View style={styles.recipeCardContent}>
+        <Text style={styles.recipeTitle}>{recipe.title}</Text>
+        <Text style={styles.recipeDescription}>{recipe.description}</Text>
+        
+        {/* Recipe Badge */}
+        <View style={styles.recipeBadgeContainer}>
+          <View style={[
+            styles.recipeBadge,
+            recipe.missedIngredientCount === 0 && styles.canMakeBadge,
+            recipe.missedIngredientCount === 1 && styles.almostCanMakeBadge,
+            recipe.missedIngredientCount >= 2 && styles.missingIngredientsBadge,
+          ]}>
+            <Text style={styles.recipeBadgeText}>
+              {recipe.missingIngredientsText}
+            </Text>
           </View>
         </View>
         
-        <View style={styles.recipeContent}>
-          <Text style={styles.recipeTitle} numberOfLines={2}>
-            {recipe.title}
-          </Text>
-          
-          <View style={styles.recipeMeta}>
-            <MetaItem icon="time-outline" value={`${recipe.readyInMinutes} min`} />
-            <MetaItem icon="star-outline" value={recipe.difficulty} />
-          </View>
-          
-          <View style={styles.ingredientInfo}>
-            <Text style={styles.ingredientTitle}>Ingredients:</Text>
-            <View style={styles.ingredientList}>
-              {recipe.usedIngredients.slice(0, 3).map((ingredient, index) => (
-                <View key={index} style={styles.ingredientItem}>
-                  <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
-                  <Text style={styles.ingredientText}>
-                    {typeof ingredient === 'string' ? ingredient : ingredient.name}
-                  </Text>
-                </View>
-              ))}
-              {recipe.missedIngredients.length > 0 && (
-                <View style={styles.ingredientItem}>
-                  <Ionicons name="close-circle" size={16} color={COLORS.error} />
-                  <Text style={styles.ingredientText}>
-                    +{recipe.missedIngredients.length} more needed
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
+        {/* Used Ingredients Info */}
+        <Text style={styles.usedIngredientsText}>
+          Uses {recipe.usedIngredientCount} of your ingredients
+        </Text>
       </View>
-    );
-  };
+    </TouchableOpacity>
+  );
 
-  const RecipeSection = ({ title, recipes, category }) => {
-    const filteredRecipes = filterRecipes(searchRecipes(recipes));
-    
-    if (filteredRecipes.length === 0) return null;
+  const renderSection = (title, recipes, emptyMessage) => {
+    const filteredRecipes = filterRecipes(recipes);
     
     return (
       <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{title}</Text>
-          <Text style={styles.sectionCount}>{filteredRecipes.length} recipes</Text>
-        </View>
-        <View style={styles.recipeGrid}>
-          {filteredRecipes.map(recipe => (
-            <RecipeCard key={recipe.id} recipe={recipe} category={category} />
-          ))}
-        </View>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {filteredRecipes.length === 0 ? (
+          <View style={styles.emptyStateContainer}>
+            <Ionicons name="restaurant-outline" size={48} color={COLORS.textSecondary} />
+            <Text style={styles.emptyStateTitle}>No recipes found</Text>
+            <Text style={styles.emptyStateText}>{emptyMessage}</Text>
+          </View>
+        ) : (
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalScroll}
+          >
+            {filteredRecipes.map(renderRecipeCard)}
+          </ScrollView>
+        )}
       </View>
     );
   };
 
+  const renderCheckbox = (label, isSelected, onToggle) => (
+    <TouchableOpacity 
+      style={styles.checkboxRow} 
+      onPress={onToggle}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+        {isSelected && (
+          <Ionicons name="checkmark" size={16} color={COLORS.white} />
+        )}
+      </View>
+      <Text style={styles.checkboxLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <Header
-        title="Explore Recipes"
-        subtitle="Discover amazing meals from your pantry"
-      />
-
-      {/* Search Bar */}
-      <SearchBar
-        placeholder="Search recipes or ingredients..."
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        onClear={() => setSearchQuery('')}
-      />
-
-      {/* Filter Buttons */}
-      <View style={styles.filterContainer}>
-        <FilterRow>
-          {filters.map(filter => (
-            <FilterButton
-              key={filter}
-              label={filter}
-              isActive={selectedFilter === filter}
-              onPress={() => setSelectedFilter(filter)}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Header Section */}
+        <View style={styles.headerSection}>
+          <View style={styles.headerRow}>
+            <LinearGradient
+              colors={['#DC2626', '#B91C1C']}
+              style={styles.titleGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Text style={styles.headerTitle}>Kitchen AI</Text>
+            </LinearGradient>
+            <TouchableOpacity 
+              style={styles.filterButton}
+              onPress={() => setShowFilterModal(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="filter" size={24} color={COLORS.textPrimary} />
+              {activeFilterCount > 0 && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+          
+          {/* Search Bar */}
+          <View style={styles.searchContainer}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search recipes..."
+              value={search}
+              onChangeText={setSearch}
+              placeholderTextColor={COLORS.textSecondary}
             />
-          ))}
-        </FilterRow>
-      </View>
+          </View>
 
-      {/* Content */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {loading ? (
-          <LoadingState
-            message="Finding delicious recipes..."
-            submessage="This may take a few seconds"
-          />
-        ) : (
-          <>
-            <RecipeSection
-              title="✨ Can Make Now"
-              recipes={recipes['Can Make Now']}
-              category="Can Make Now"
-            />
-            <RecipeSection
-              title="🔧 Almost There"
-              recipes={recipes['Almost There']}
-              category="Almost There"
-            />
-            
-            {Object.values(recipes).every(recipeList => 
-              filterRecipes(searchRecipes(recipeList)).length === 0
-            ) && (
-              <EmptyState
-                icon="restaurant-outline"
-                title="No recipes found"
-                message="Try adjusting your search or filters"
-                action={
-                  <Button
-                    title="Try Again"
-                    onPress={loadRecipes}
-                    variant="primary"
-                    size="medium"
-                  />
+          {/* Loading indicator for background pantry search */}
+          {isLoading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+              <Text style={styles.loadingText}>
+                {pantryItems.length > 0 
+                  ? `Finding recipes with your ${pantryItems.length} pantry items...` 
+                  : 'Searching recipes...'
                 }
-              />
-            )}
-          </>
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Recipe Sections */}
+        {renderSection(
+          'Cook Now', 
+          cookNowRecipes, 
+          selectedIngredients.length === 0 
+            ? (pantryItems.length > 0 
+                ? 'No recipes found with your current pantry items. Try adding more ingredients to your pantry!' 
+                : 'Add items to your pantry to see recipes you can make right now!'
+              )
+            : 'Try adding more ingredients to find recipes you can make.'
+        )}
+        {renderSection(
+          'Almost There', 
+          almostThereRecipes, 
+          selectedIngredients.length === 0 
+            ? (pantryItems.length > 0 
+                ? 'No recipes found with your current pantry items. Try adding more ingredients to your pantry!' 
+                : 'Add items to your pantry to see recipes you\'re close to making!'
+              )
+            : 'Try adding more ingredients to find recipes you\'re close to making.'
+        )}
+        {renderSection(
+          'Discover', 
+          discoverRecipes, 
+          'Popular recipes will appear here as you explore more ingredients.'
         )}
       </ScrollView>
+
+
+
+      {/* Filter Modal */}
+      <Modal
+        visible={showFilterModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowFilterModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filters</Text>
+              <TouchableOpacity 
+                onPress={() => setShowFilterModal(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Body */}
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Meal Type Section */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Meal Type</Text>
+                {mealTypes.map(mealType => (
+                  <View key={mealType}>
+                    {renderCheckbox(
+                      mealType,
+                      selectedMealTypes.includes(mealType),
+                      () => toggleMealType(mealType)
+                    )}
+                  </View>
+                ))}
+              </View>
+
+              {/* Time Section */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Time</Text>
+                {timeCategories.map(timeCategory => (
+                  <View key={timeCategory.value}>
+                    {renderCheckbox(
+                      timeCategory.label,
+                      selectedTimeCategories.includes(timeCategory.value),
+                      () => toggleTimeCategory(timeCategory.value)
+                    )}
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+
+            {/* Modal Footer */}
+            <View style={styles.modalFooter}>
+              <TouchableOpacity 
+                style={styles.clearButton}
+                onPress={clearAllFilters}
+              >
+                <Text style={styles.clearButtonText}>Clear All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.applyButton}
+                onPress={applyFilters}
+              >
+                <Text style={styles.applyButtonText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -469,101 +589,288 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.white,
   },
-  filterContainer: {
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.md,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+  scrollContent: {
+    paddingBottom: 32,
   },
-  content: {
-    flex: 1,
+  headerSection: {
+    padding: 20,
+    backgroundColor: COLORS.white,
   },
-  section: {
-    marginBottom: SPACING.xxl,
-  },
-  sectionHeader: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.lg,
+    marginBottom: 20,
+  },
+  titleGradient: {
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.white,
+  },
+  filterButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadgeText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  searchContainer: {
+    marginBottom: 24,
+  },
+  searchInput: {
+    backgroundColor: COLORS.background,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  section: {
+    marginBottom: 32,
   },
   sectionTitle: {
-    ...TYPOGRAPHY.h2,
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    marginBottom: 16,
+    paddingHorizontal: 20,
   },
-  sectionCount: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: COLORS.textSecondary,
-  },
-  recipeGrid: {
-    paddingHorizontal: SPACING.xl,
-    gap: SPACING.lg,
+  horizontalScroll: {
+    paddingLeft: 20,
+    paddingRight: 20,
   },
   recipeCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: BORDER_RADIUS.xl,
-    ...SHADOWS.medium,
+    width: 280,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 20,
+    marginRight: 16,
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+    ...SHADOWS.large,
     overflow: 'hidden',
-  },
-  recipeImageContainer: {
-    position: 'relative',
-    height: 200,
   },
   recipeImage: {
     width: '100%',
-    height: '100%',
+    height: 180,
     resizeMode: 'cover',
   },
-  saveButton: {
-    position: 'absolute',
-    top: SPACING.md,
-    right: SPACING.md,
-    backgroundColor: COLORS.overlay,
-    borderRadius: BORDER_RADIUS.round,
-    padding: SPACING.sm,
-  },
-  recipeBadge: {
-    position: 'absolute',
-    top: SPACING.md,
-    left: SPACING.md,
-  },
-  recipeContent: {
-    padding: SPACING.xl,
+  recipeCardContent: {
+    padding: 16,
   },
   recipeTitle: {
-    ...TYPOGRAPHY.h3,
-    marginBottom: SPACING.md,
-    lineHeight: 24,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    marginBottom: 6,
   },
-  recipeMeta: {
+  recipeDescription: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    width: width - 40,
+    maxHeight: '80%',
+    ...SHADOWS.large,
+  },
+  modalHeader: {
     flexDirection: 'row',
-    marginBottom: SPACING.lg,
-    paddingBottom: SPACING.md,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
+    borderBottomColor: COLORS.border,
   },
-  ingredientInfo: {
-    gap: SPACING.md,
-  },
-  ingredientTitle: {
-    ...TYPOGRAPHY.bodyMedium,
-    fontWeight: '600',
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
     color: COLORS.textPrimary,
   },
-  ingredientList: {
-    gap: SPACING.sm,
+  closeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.background,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  ingredientItem: {
+  modalBody: {
+    padding: 20,
+  },
+  filterSection: {
+    marginBottom: 24,
+  },
+  filterSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 12,
+  },
+  checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    paddingVertical: 12,
+    minHeight: 44,
   },
-  ingredientText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: COLORS.textSecondary,
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: COLORS.border,
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  checkboxLabel: {
+    fontSize: 16,
+    color: COLORS.textPrimary,
     flex: 1,
   },
+  modalFooter: {
+    flexDirection: 'row',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    gap: 12,
+  },
+  clearButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  applyButton: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  applyButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.white,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+  },
+  loadingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  // Empty state styles
+  emptyStateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+    backgroundColor: COLORS.background,
+    borderRadius: 16,
+    marginHorizontal: 20,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  // Recipe card enhancement styles
+  recipeBadgeContainer: {
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  recipeBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: COLORS.background,
+  },
+  canMakeBadge: {
+    backgroundColor: '#10B981', // Green
+  },
+  almostCanMakeBadge: {
+    backgroundColor: '#F59E0B', // Orange
+  },
+  missingIngredientsBadge: {
+    backgroundColor: '#EF4444', // Red
+  },
+  recipeBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.white,
+  },
+  usedIngredientsText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+
 }); 
