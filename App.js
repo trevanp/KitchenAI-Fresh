@@ -7,6 +7,7 @@ import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-cont
 import { COLORS } from './components/DesignSystem';
 import { PantryProvider, usePantry } from './PantryContext';
 import 'react-native-gesture-handler';
+import 'dotenv/config';
 
 // Import screen components
 import ExploreScreen from './screens/ExploreScreen';
