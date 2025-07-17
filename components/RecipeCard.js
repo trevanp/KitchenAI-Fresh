@@ -7,10 +7,11 @@ import Animated, {
   withSpring,
   withTiming 
 } from 'react-native-reanimated';
+import { COLORS, SHADOWS } from './DesignSystem';
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
-export default function RecipeCard({ recipe, onPress, onFavorite }) {
+export default function RecipeCard({ recipe, onPress, onFavorite, pantryItems = [] }) {
   const scale = useSharedValue(1);
   const heartScale = useSharedValue(1);
   
@@ -37,6 +38,40 @@ export default function RecipeCard({ recipe, onPress, onFavorite }) {
     onFavorite?.(recipe);
   };
 
+  // Calculate ingredient availability
+  const getIngredientAvailability = () => {
+    if (!recipe.extendedIngredients || !pantryItems.length) {
+      return { available: 0, total: 0, percentage: 0 };
+    }
+
+    const available = recipe.extendedIngredients.filter(ingredient => {
+      const normalizedIngredientName = ingredient.name.toLowerCase().trim();
+      return pantryItems.some(item => {
+        const normalizedItemName = item.name.toLowerCase().trim();
+        return normalizedItemName.includes(normalizedIngredientName) || 
+               normalizedIngredientName.includes(normalizedItemName);
+      });
+    }).length;
+
+    const total = recipe.extendedIngredients.length;
+    const percentage = total > 0 ? Math.round((available / total) * 100) : 0;
+
+    return { available, total, percentage };
+  };
+
+  const availability = getIngredientAvailability();
+  const getAvailabilityColor = () => {
+    if (availability.percentage >= 80) return '#10B981';
+    if (availability.percentage >= 50) return '#F59E0B';
+    return '#EF4444';
+  };
+
+  const getAvailabilityText = () => {
+    if (availability.percentage >= 80) return 'Ready to Cook!';
+    if (availability.percentage >= 50) return 'Almost Ready';
+    return 'Missing Ingredients';
+  };
+
   return (
     <AnimatedTouchable
       style={[styles.card, animatedStyle]}
@@ -47,9 +82,12 @@ export default function RecipeCard({ recipe, onPress, onFavorite }) {
     >
       <View style={styles.imageContainer}>
         <Image source={{ uri: recipe.image }} style={styles.image} />
-        <View style={styles.readyBadge}>
-          <Text style={styles.readyText}>Ready</Text>
+        
+        {/* Availability Badge */}
+        <View style={[styles.availabilityBadge, { backgroundColor: getAvailabilityColor() }]}>
+          <Text style={styles.availabilityText}>{getAvailabilityText()}</Text>
         </View>
+        
         <AnimatedTouchable 
           style={[styles.favoriteButton, heartAnimatedStyle]}
           onPress={handleFavorite}
@@ -68,7 +106,7 @@ export default function RecipeCard({ recipe, onPress, onFavorite }) {
         <View style={styles.metaRow}>
           <View style={styles.timeContainer}>
             <Ionicons name="time-outline" size={16} color="#666" />
-            <Text style={styles.metaText}>{recipe.readyInMinutes} min</Text>
+            <Text style={styles.metaText}>{recipe.readyInMinutes || recipe.cookTime || 'N/A'} min</Text>
           </View>
           
           <View style={styles.difficultyContainer}>
@@ -77,22 +115,30 @@ export default function RecipeCard({ recipe, onPress, onFavorite }) {
           </View>
         </View>
         
-        <View style={styles.ingredientsContainer}>
-          <Text style={styles.ingredientsLabel}>Ingredients:</Text>
-          <View style={styles.ingredientsList}>
-            {recipe.ingredients?.slice(0, 2).map((ingredient, index) => (
-              <View key={index} style={styles.ingredientTag}>
-                <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
-                <Text style={styles.ingredientText}>{ingredient}</Text>
-              </View>
-            ))}
-            {recipe.ingredients?.length > 2 && (
-              <Text style={styles.moreIngredients}>
-                +{recipe.ingredients.length - 2} more
-              </Text>
-            )}
+        {/* Ingredient Availability Bar */}
+        <View style={styles.availabilityContainer}>
+          <View style={styles.availabilityBar}>
+            <View 
+              style={[
+                styles.availabilityFill, 
+                { 
+                  width: `${availability.percentage}%`,
+                  backgroundColor: getAvailabilityColor()
+                }
+              ]} 
+            />
           </View>
+          <Text style={styles.availabilityPercentage}>
+            {availability.percentage}% ingredients available
+          </Text>
         </View>
+        
+        {/* Used Ingredients Info */}
+        {recipe.usedIngredientCount && (
+          <View style={styles.ingredientsContainer}>
+            <Text style={styles.ingredientsLabel}>Uses {recipe.usedIngredientCount} of your ingredients</Text>
+          </View>
+        )}
       </View>
     </AnimatedTouchable>
   );
@@ -120,16 +166,16 @@ const styles = StyleSheet.create({
     height: '100%',
     resizeMode: 'cover',
   },
-  readyBadge: {
+  availabilityBadge: {
     position: 'absolute',
     top: 12,
     left: 12,
-    backgroundColor: '#4CAF50',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    zIndex: 1,
   },
-  readyText: {
+  availabilityText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
@@ -171,39 +217,32 @@ const styles = StyleSheet.create({
     color: '#666',
     fontWeight: '500',
   },
+  availabilityContainer: {
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  availabilityBar: {
+    height: 8,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  availabilityFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  availabilityPercentage: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
   ingredientsContainer: {
     marginTop: 8,
   },
   ingredientsLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 6,
-  },
-  ingredientsList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-  ingredientTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E8F5E8',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 6,
-    marginBottom: 4,
-  },
-  ingredientText: {
-    marginLeft: 4,
-    fontSize: 12,
-    color: '#2E7D32',
-    fontWeight: '500',
-  },
-  moreIngredients: {
-    fontSize: 12,
     color: '#666',
-    fontStyle: 'italic',
+    fontWeight: '500',
   },
 }); 

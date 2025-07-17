@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -31,6 +31,10 @@ import {
   isApiKeyConfigured,
   getApiStatus 
 } from '../services/spoonacularService';
+import openaiService from '../services/openaiService';
+import smartMatcher from '../services/smartIngredientMatcher';
+import smartPantry from '../services/smartPantrySystem';
+import { usePantry } from '../PantryContext';
 
 const { width } = Dimensions.get('window');
 
@@ -63,7 +67,49 @@ const timeCategories = [
   { label: 'Long (30+ min)', value: 'Long' },
 ];
 
-export default function ExploreScreen({ navigation, pantryItems = [] }) {
+export default function ExploreScreen({ navigation: navigationProp, pantryItems = [] }) {
+  // Use useNavigation hook as fallback if prop is not provided
+  const navigationHook = useNavigation();
+  const navigation = navigationProp || navigationHook;
+  
+  // Get pantry context for essentials
+  const { getAllAvailableIngredients } = usePantry();
+  
+  // Debug navigation object
+  useEffect(() => {
+    console.log('🔍 ExploreScreen - Navigation debug:');
+    console.log('Navigation prop:', navigationProp);
+    console.log('Navigation hook:', navigationHook);
+    console.log('Final navigation object:', navigation);
+    console.log('Navigation type:', typeof navigation);
+    console.log('Navigation methods:', navigation ? Object.keys(navigation) : 'undefined');
+    
+    // Validate navigation object
+    if (!navigation) {
+      console.error('❌ CRITICAL: Navigation object is undefined in ExploreScreen!');
+    } else if (typeof navigation.navigate !== 'function') {
+      console.error('❌ CRITICAL: navigation.navigate is not a function!');
+    } else {
+      console.log('✅ Navigation object is valid');
+    }
+  }, [navigation, navigationProp, navigationHook]);
+
+  // Safety check - if navigation is still undefined, show error
+  if (!navigation) {
+    console.error('❌ CRITICAL: Navigation is still undefined after fallback!');
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Ionicons name="warning" size={64} color={COLORS.error} />
+          <Text style={styles.errorTitle}>Navigation Error</Text>
+          <Text style={styles.errorText}>
+            Unable to load navigation. Please restart the app.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const [search, setSearch] = useState('');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [selectedMealTypes, setSelectedMealTypes] = useState([]);
@@ -76,6 +122,12 @@ export default function ExploreScreen({ navigation, pantryItems = [] }) {
   const [discoverRecipes, setDiscoverRecipes] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState(null);
+
+  // AI-powered features state
+  const [aiRecipeMatches, setAiRecipeMatches] = useState(null);
+  const [aiInsights, setAiInsights] = useState(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(true);
 
   // Calculate active filter count
   const activeFilterCount = selectedMealTypes.length + selectedTimeCategories.length;
@@ -138,11 +190,23 @@ export default function ExploreScreen({ navigation, pantryItems = [] }) {
     setApiError(null);
 
     try {
-      const ingredientNames = selectedIngredients.map(ing => ing.name);
-      console.log('🔍 Searching recipes with ingredients:', ingredientNames);
-      console.log('📊 Total ingredients:', ingredientNames.length);
+      // Get all available ingredients including essentials
+      const allAvailableIngredients = await getAllAvailableIngredients();
+      const userSelectedIngredients = selectedIngredients.map(ing => ing.name);
       
-      const recipes = await searchRecipesByIngredients(ingredientNames, {
+      // Combine user-selected ingredients with essentials for better recipe matching
+      const allIngredientNames = [...new Set([
+        ...userSelectedIngredients,
+        ...allAvailableIngredients.map(item => item.name)
+      ])];
+      
+      console.log('🔍 Searching recipes with ingredients:', allIngredientNames);
+      console.log('📊 Total ingredients (including essentials):', allIngredientNames.length);
+      console.log('👤 User selected ingredients:', userSelectedIngredients.length);
+      console.log('⭐ Essentials included:', allIngredientNames.length - userSelectedIngredients.length);
+      console.log('🔧 All available ingredients from pantry:', allAvailableIngredients.map(item => `${item.name}${item.isEssential ? ' (essential)' : ''}`));
+      
+      const recipes = await searchRecipesByIngredients(allIngredientNames, {
         number: 20,
         ranking: 1,
         ignorePantry: false,
@@ -163,6 +227,10 @@ export default function ExploreScreen({ navigation, pantryItems = [] }) {
       setCookNowRecipes(cookNow);
       setAlmostThereRecipes(almostThere);
       setDiscoverRecipes(discover);
+
+      // Trigger AI analysis with all recipes and pantry items (including essentials)
+      const allRecipes = [...cookNow, ...almostThere, ...discover];
+      await analyzeWithAI(allRecipes, allAvailableIngredients);
 
     } catch (error) {
       console.error('❌ Error searching recipes:', error);
@@ -191,6 +259,52 @@ export default function ExploreScreen({ navigation, pantryItems = [] }) {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // AI-powered recipe analysis
+  const analyzeWithAI = async (recipes, allAvailableIngredients) => {
+    if (!aiEnabled) return;
+    
+    setIsAiLoading(true);
+    try {
+      // Get AI-powered recipe matches with all available ingredients (including essentials)
+      const matches = await openaiService.analyzeRecipeMatches(allAvailableIngredients, recipes);
+      setAiRecipeMatches(matches);
+      
+      // Get pantry insights with all available ingredients
+      const insights = await openaiService.getPantryInsights(allAvailableIngredients);
+      setAiInsights(insights);
+      
+      // Use smart matcher for more accurate recipe categorization
+      const smartMatches = await smartMatcher.checkMultipleRecipes(recipes, allAvailableIngredients);
+      console.log('🤖 Smart matcher results:', smartMatches);
+      
+      // Use smart pantry system for enhanced recipe checking
+      const enhancedRecipes = await Promise.all(
+        recipes.slice(0, 5).map(async (recipe) => {
+          try {
+            const recipeIngredients = recipe.missedIngredients.concat(recipe.usedIngredients).map(ing => ing.name);
+            const smartCheck = await smartPantry.checkRecipeIngredients(recipeIngredients, allAvailableIngredients);
+            return {
+              ...recipe,
+              smartCheck
+            };
+          } catch (error) {
+            console.log('🤖 Smart pantry check failed for recipe:', recipe.title, error.message);
+            return recipe;
+          }
+        })
+      );
+      
+      console.log('🤖 Enhanced recipes with smart pantry:', enhancedRecipes.length);
+      
+      console.log('🤖 AI analysis completed:', { matches, insights, smartMatches, enhancedRecipes });
+    } catch (error) {
+      console.log('🤖 AI features unavailable:', error.message);
+      setAiEnabled(false);
+    } finally {
+      setIsAiLoading(false);
     }
   };
 
@@ -351,18 +465,58 @@ export default function ExploreScreen({ navigation, pantryItems = [] }) {
 
 
 
-  const renderRecipeCard = (recipe) => (
-    <TouchableOpacity 
-      key={recipe.id} 
-      style={styles.recipeCard}
-      onPress={() => navigation.navigate('RecipeDetail', {
-        recipeId: recipe.id,
-        recipeTitle: recipe.title,
-        recipeImage: recipe.image,
-        selectedIngredients: selectedIngredients,
-      })}
-      activeOpacity={0.8}
-    >
+  const renderRecipeCard = (recipe) => {
+    const handleRecipePress = () => {
+      if (!navigation) {
+        console.error('❌ Navigation is undefined in ExploreScreen');
+        Alert.alert('Navigation Error', 'Unable to open recipe details. Navigation is not available.');
+        return;
+      }
+      
+      try {
+        // Try primary navigation method
+        navigation.navigate('RecipeDetail', {
+          recipeId: recipe.id,
+          recipeTitle: recipe.title,
+          recipeImage: recipe.image,
+          recipe: recipe, // Pass the full recipe object
+          selectedIngredients: selectedIngredients,
+        });
+        console.log('✅ Successfully navigated to RecipeDetail');
+      } catch (error) {
+        console.error('❌ Primary navigation failed:', error);
+        
+        // Fallback: try to navigate to the Explore stack first
+        try {
+          navigation.navigate('Explore', {
+            screen: 'RecipeDetail',
+            params: {
+              recipeId: recipe.id,
+              recipeTitle: recipe.title,
+              recipeImage: recipe.image,
+              recipe: recipe,
+              selectedIngredients: selectedIngredients,
+            }
+          });
+          console.log('✅ Successfully navigated using fallback method');
+        } catch (fallbackError) {
+          console.error('❌ Fallback navigation also failed:', fallbackError);
+          Alert.alert(
+            'Navigation Error', 
+            'Unable to open recipe details. Please try again or restart the app.',
+            [{ text: 'OK' }]
+          );
+        }
+      }
+    };
+
+    return (
+      <TouchableOpacity 
+        key={recipe.id} 
+        style={styles.recipeCard}
+        onPress={handleRecipePress}
+        activeOpacity={0.8}
+      >
       <Image source={{ uri: recipe.image }} style={styles.recipeImage} />
       <View style={styles.recipeCardContent}>
         <Text style={styles.recipeTitle}>{recipe.title}</Text>
@@ -388,7 +542,8 @@ export default function ExploreScreen({ navigation, pantryItems = [] }) {
         </Text>
       </View>
     </TouchableOpacity>
-  );
+    );
+  };
 
   const renderSection = (title, recipes, emptyMessage) => {
     const filteredRecipes = filterRecipes(recipes);
@@ -482,6 +637,77 @@ export default function ExploreScreen({ navigation, pantryItems = [] }) {
             </View>
           )}
         </View>
+
+        {/* AI Insights Section */}
+        {aiInsights && aiInsights.insights && aiInsights.insights.length > 0 && (
+          <View style={styles.aiInsightsSection}>
+            <View style={styles.aiInsightsHeader}>
+              <Ionicons name="bulb" size={20} color={COLORS.primary} />
+              <Text style={styles.aiInsightsTitle}>AI Kitchen Insights</Text>
+              {isAiLoading && (
+                <ActivityIndicator size="small" color={COLORS.primary} style={{ marginLeft: 8 }} />
+              )}
+            </View>
+            
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.aiInsightsScroll}
+            >
+              {aiInsights.insights.map((insight, index) => (
+                <View key={index} style={[styles.insightCard, styles[`insight${insight.type}`]]}>
+                  <Text style={styles.insightIcon}>{insight.icon}</Text>
+                  <Text style={styles.insightText}>{insight.message}</Text>
+                </View>
+              ))}
+            </ScrollView>
+
+            {aiInsights.quick_stats && (
+              <View style={styles.quickStatsContainer}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{aiInsights.quick_stats.total_possible_meals}</Text>
+                  <Text style={styles.statLabel}>Possible Meals</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{aiInsights.quick_stats.expiring_soon}</Text>
+                  <Text style={styles.statLabel}>Expiring Soon</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>Most Versatile</Text>
+                  <Text style={styles.statIngredient}>{aiInsights.quick_stats.most_versatile_ingredient}</Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* AI Recipe Matches Section */}
+        {aiRecipeMatches && aiRecipeMatches.perfect_matches && aiRecipeMatches.perfect_matches.length > 0 && (
+          <View style={styles.aiMatchesSection}>
+            <View style={styles.aiMatchesHeader}>
+              <Ionicons name="star" size={20} color="#10B981" />
+              <Text style={styles.aiMatchesTitle}>AI Perfect Matches</Text>
+            </View>
+            
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.aiMatchesScroll}
+            >
+              {aiRecipeMatches.perfect_matches.map((match, index) => (
+                <View key={index} style={styles.aiMatchCard}>
+                  <View style={styles.aiMatchHeader}>
+                    <Text style={styles.aiMatchName}>{match.recipe_name}</Text>
+                    <View style={styles.confidenceBadge}>
+                      <Text style={styles.confidenceText}>{match.confidence}%</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.aiMatchReason}>{match.reason}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Recipe Sections */}
         {renderSection(
@@ -871,6 +1097,164 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 4,
+  },
+  // AI Insights Styles
+  aiInsightsSection: {
+    marginHorizontal: 20,
+    marginBottom: 24,
+  },
+  aiInsightsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  aiInsightsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginLeft: 8,
+  },
+  aiInsightsScroll: {
+    paddingRight: 20,
+  },
+  insightCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 16,
+    marginRight: 12,
+    minWidth: 200,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.medium,
+  },
+  insightopportunity: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#10B981',
+  },
+  insightwarning: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+  },
+  insightsuggestion: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+  },
+  insightinfo: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#6B7280',
+  },
+  insightIcon: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  insightText: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    lineHeight: 20,
+  },
+  quickStatsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  statIngredient: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginTop: 4,
+  },
+  // AI Recipe Matches Styles
+  aiMatchesSection: {
+    marginHorizontal: 20,
+    marginBottom: 24,
+  },
+  aiMatchesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  aiMatchesTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginLeft: 8,
+  },
+  aiMatchesScroll: {
+    paddingRight: 20,
+  },
+  aiMatchCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 16,
+    marginRight: 12,
+    minWidth: 250,
+    borderWidth: 1,
+    borderColor: '#10B981',
+    ...SHADOWS.medium,
+  },
+  aiMatchHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  aiMatchName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    flex: 1,
+  },
+  confidenceBadge: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  confidenceText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.white,
+  },
+  aiMatchReason: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+  },
+  // Error state styles
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  errorTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 24,
   },
 
 }); 

@@ -21,27 +21,92 @@ const { width, height } = Dimensions.get('window');
 const savedRecipes = [];
 const recipeDatabase = [];
 
-const daysOfWeek = [
-  { name: 'Sunday', date: '2024-03-02' },
-  { name: 'Monday', date: '2024-03-03' },
-  { name: 'Tuesday', date: '2024-03-04' },
-  { name: 'Wednesday', date: '2024-03-05' },
-  { name: 'Thursday', date: '2024-03-06' },
-  { name: 'Friday', date: '2024-03-07' },
-  { name: 'Saturday', date: '2024-03-08' },
-];
 const mealTypes = ['Breakfast', 'Lunch', 'Dinner'];
 
-function getWeekRange() {
-  // For demo, return static range
-  return { start: 'March 2', end: '8' };
+// Dynamic date functions
+function getCurrentWeek() {
+  const today = new Date();
+  const startOfWeek = new Date(today);
+  const day = today.getDay();
+  const diff = today.getDate() - day; // Sunday = 0
+  startOfWeek.setDate(diff);
+  
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  
+  return {
+    start: startOfWeek,
+    end: endOfWeek,
+    today: today
+  };
+}
+
+function formatWeekRange(startDate, endDate) {
+  const startMonth = startDate.toLocaleDateString('en-US', { month: 'short' });
+  const endMonth = endDate.toLocaleDateString('en-US', { month: 'short' });
+  const startDay = startDate.getDate();
+  const endDay = endDate.getDate();
+  
+  if (startMonth === endMonth) {
+    return `${startMonth} ${startDay} - ${endDay}`;
+  } else {
+    return `${startMonth} ${startDay} - ${endMonth} ${endDay}`;
+  }
+}
+
+function getDayData(date, today) {
+  const isToday = date.toDateString() === today.toDateString();
+  const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
+  const monthDay = date.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric' 
+  });
+  
+  return {
+    dayName,
+    monthDay,
+    isToday,
+    fullDate: date,
+    dateString: date.toISOString().split('T')[0]
+  };
+}
+
+function generateWeekData(startDate = null) {
+  const week = startDate ? {
+    start: startDate,
+    end: new Date(startDate.getTime() + (6 * 24 * 60 * 60 * 1000)),
+    today: new Date()
+  } : getCurrentWeek();
+  
+  const days = [];
+  
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(week.start);
+    date.setDate(week.start.getDate() + i);
+    
+    const dayData = getDayData(date, week.today);
+    days.push(dayData);
+  }
+  
+  return {
+    weekRange: formatWeekRange(week.start, week.end),
+    days: days,
+    currentWeek: week
+  };
+}
+
+function isSameWeek(date1, date2) {
+  const week1 = getCurrentWeek();
+  return date1.toDateString() === week1.start.toDateString();
 }
 
 export default function MealPlanScreen() {
+  // Initialize with current week data
+  const [weekData, setWeekData] = useState(() => generateWeekData());
   const [mealPlan, setMealPlan] = useState(() => {
     const plan = {};
-    daysOfWeek.forEach(day => {
-      plan[day.date] = { Breakfast: null, Lunch: null, Dinner: null };
+    weekData.days.forEach(day => {
+      plan[day.dateString] = { Breakfast: null, Lunch: null, Dinner: null };
     });
     return plan;
   });
@@ -51,9 +116,6 @@ export default function MealPlanScreen() {
   const [activeTab, setActiveTab] = useState('cookbook'); // 'cookbook' or 'search'
   const [searchQuery, setSearchQuery] = useState('');
   const [savedRecipes, setSavedRecipes] = useState(savedRecipes);
-
-  // For demo, today is Sunday
-  const todayDate = '2024-03-02';
 
   const openRecipeModal = (day, mealType) => {
     setSelectedDay(day);
@@ -83,8 +145,47 @@ export default function MealPlanScreen() {
     setSearchQuery('');
   };
 
-  const handlePrevWeek = () => {};
-  const handleNextWeek = () => {};
+  const handlePrevWeek = () => {
+    const newStartDate = new Date(weekData.currentWeek.start);
+    newStartDate.setDate(weekData.currentWeek.start.getDate() - 7);
+    const newWeekData = generateWeekData(newStartDate);
+    setWeekData(newWeekData);
+    
+    // Update meal plan for new week
+    const newMealPlan = {};
+    newWeekData.days.forEach(day => {
+      newMealPlan[day.dateString] = { Breakfast: null, Lunch: null, Dinner: null };
+    });
+    setMealPlan(newMealPlan);
+  };
+
+  const handleNextWeek = () => {
+    const newStartDate = new Date(weekData.currentWeek.start);
+    newStartDate.setDate(weekData.currentWeek.start.getDate() + 7);
+    const newWeekData = generateWeekData(newStartDate);
+    setWeekData(newWeekData);
+    
+    // Update meal plan for new week
+    const newMealPlan = {};
+    newWeekData.days.forEach(day => {
+      newMealPlan[day.dateString] = { Breakfast: null, Lunch: null, Dinner: null };
+    });
+    setMealPlan(newMealPlan);
+  };
+
+  const jumpToCurrentWeek = () => {
+    const currentWeekData = generateWeekData();
+    setWeekData(currentWeekData);
+    
+    // Update meal plan for current week
+    const newMealPlan = {};
+    currentWeekData.days.forEach(day => {
+      newMealPlan[day.dateString] = { Breakfast: null, Lunch: null, Dinner: null };
+    });
+    setMealPlan(newMealPlan);
+  };
+
+  const isCurrentWeek = isSameWeek(weekData.currentWeek.start, new Date());
 
   // Filter recipes based on search query - only show results when actively searching
   const filteredSearchRecipes = searchQuery.trim() === '' 
@@ -94,8 +195,6 @@ export default function MealPlanScreen() {
         recipe.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         recipe.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
       );
-
-  const { start, end } = getWeekRange();
 
   const renderRecipeCard = (recipe) => (
     <TouchableOpacity 
@@ -181,40 +280,56 @@ export default function MealPlanScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         {/* Header Section */}
         <Text style={styles.header}>Meal Plan</Text>
-        <Text style={styles.weekRange}>{start} - {end}</Text>
+        <View style={styles.weekInfoContainer}>
+          <Text style={styles.weekRange}>{weekData.weekRange}</Text>
+          {isCurrentWeek && (
+            <View style={styles.currentWeekBadge}>
+              <Text style={styles.currentWeekBadgeText}>This Week</Text>
+            </View>
+          )}
+        </View>
         <View style={styles.weekNavRow}>
           <TouchableOpacity style={styles.weekNavBtn} onPress={handlePrevWeek}>
             <Ionicons name="chevron-back" size={18} color={COLORS.textSecondary} />
             <Text style={styles.weekNavText}>Previous Week</Text>
           </TouchableOpacity>
+          
+          {!isCurrentWeek && (
+            <TouchableOpacity style={styles.todayButton} onPress={jumpToCurrentWeek}>
+              <Ionicons name="calendar" size={16} color={COLORS.white} />
+              <Text style={styles.todayButtonText}>Today</Text>
+            </TouchableOpacity>
+          )}
+          
           <TouchableOpacity style={styles.weekNavBtn} onPress={handleNextWeek}>
             <Text style={styles.weekNavText}>Next Week</Text>
             <Ionicons name="chevron-forward" size={18} color={COLORS.textSecondary} />
           </TouchableOpacity>
         </View>
         {/* Day Cards */}
-        {daysOfWeek.map(day => {
-          const isToday = day.date === todayDate;
+        {weekData.days.map(day => {
           return (
             <View
-              key={day.date}
-              style={[styles.dayCard, isToday && styles.dayCardToday]}
+              key={day.dateString}
+              style={[styles.dayCard, day.isToday && styles.dayCardToday]}
             >
               <View style={styles.dayHeaderRow}>
-                <Text style={styles.dayHeaderText}>
-                  {day.name} <Text style={styles.dayHeaderDate}>{day.date.replace('2024-', 'March ')}</Text>
+                <Text style={[styles.dayHeaderText, day.isToday && styles.dayHeaderTextToday]}>
+                  {day.dayName} <Text style={[styles.dayHeaderDate, day.isToday && styles.dayHeaderDateToday]}>{day.monthDay}</Text>
                 </Text>
-                {isToday && (
-                  <View style={styles.todayBadge}><Text style={styles.todayBadgeText}>Today</Text></View>
+                {day.isToday && (
+                  <View style={styles.todayBadge}>
+                    <Text style={styles.todayBadgeText}>Today</Text>
+                  </View>
                 )}
               </View>
               {mealTypes.map(mealType => {
-                const meal = mealPlan[day.date][mealType];
+                const meal = mealPlan[day.dateString][mealType];
                 return (
                   <View key={mealType} style={styles.mealSection}>
                     <View style={styles.mealRow}>
                       <Text style={styles.mealType}>{mealType}</Text>
-                      <TouchableOpacity onPress={() => openRecipeModal(day.date, mealType)}>
+                      <TouchableOpacity onPress={() => openRecipeModal(day.dateString, mealType)}>
                         <Text style={styles.changeBtn}>{meal ? 'Change' : ''}</Text>
                       </TouchableOpacity>
                     </View>
@@ -228,7 +343,7 @@ export default function MealPlanScreen() {
                     ) : (
                       <View style={styles.mealCardEmpty}>
                         <Text style={styles.mealEmptyText}>No {mealType.toLowerCase()} planned</Text>
-                        <TouchableOpacity style={styles.addRecipeBtn} onPress={() => openRecipeModal(day.date, mealType)}>
+                        <TouchableOpacity style={styles.addRecipeBtn} onPress={() => openRecipeModal(day.dateString, mealType)}>
                           <Text style={styles.addRecipeBtnText}>Add Recipe</Text>
                         </TouchableOpacity>
                       </View>
@@ -257,7 +372,7 @@ export default function MealPlanScreen() {
               <Ionicons name="close" size={24} color={COLORS.textPrimary} />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>
-              Add {selectedMealType} for {daysOfWeek.find(d => d.date === selectedDay)?.name}
+              Add {selectedMealType} for {weekData.days.find(d => d.dateString === selectedDay)?.dayName}
             </Text>
             <View style={{ width: 40 }} />
           </View>
@@ -293,15 +408,75 @@ export default function MealPlanScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.white },
   header: { fontSize: 32, fontWeight: 'bold', color: COLORS.textPrimary, marginTop: 24, marginBottom: 4, marginLeft: 20 },
-  weekRange: { fontSize: 20, fontWeight: '600', color: COLORS.textPrimary, marginLeft: 20, marginBottom: 8 },
-  weekNavRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 20, marginBottom: 18 },
+  weekInfoContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginLeft: 20, 
+    marginBottom: 8 
+  },
+  weekRange: { fontSize: 20, fontWeight: '600', color: COLORS.textPrimary, marginRight: 12 },
+  currentWeekBadge: { 
+    backgroundColor: COLORS.primary, 
+    borderRadius: 12, 
+    paddingHorizontal: 10, 
+    paddingVertical: 4 
+  },
+  currentWeekBadgeText: { 
+    color: COLORS.white, 
+    fontWeight: '700', 
+    fontSize: 12 
+  },
+  weekNavRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginHorizontal: 20, 
+    marginBottom: 18 
+  },
   weekNavBtn: { flexDirection: 'row', alignItems: 'center' },
   weekNavText: { color: COLORS.textSecondary, fontWeight: '600', fontSize: 15 },
-  dayCard: { backgroundColor: COLORS.background, borderRadius: 18, marginHorizontal: 16, marginBottom: 22, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
-  dayCardToday: { borderWidth: 2, borderColor: COLORS.primary, position: 'relative' },
+  todayButton: { 
+    backgroundColor: COLORS.primary, 
+    borderRadius: 20, 
+    paddingHorizontal: 16, 
+    paddingVertical: 8, 
+    flexDirection: 'row', 
+    alignItems: 'center',
+    gap: 6
+  },
+  todayButtonText: { 
+    color: COLORS.white, 
+    fontWeight: '700', 
+    fontSize: 14 
+  },
+  dayCard: { 
+    backgroundColor: COLORS.background, 
+    borderRadius: 18, 
+    marginHorizontal: 16, 
+    marginBottom: 22, 
+    padding: 18, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.04, 
+    shadowRadius: 4, 
+    elevation: 1,
+    borderWidth: 2,
+    borderColor: 'transparent'
+  },
+  dayCardToday: { 
+    borderColor: COLORS.primary, 
+    backgroundColor: '#FFF5F5',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3
+  },
   dayHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   dayHeaderText: { fontSize: 18, fontWeight: '700', color: COLORS.textPrimary, marginRight: 8 },
+  dayHeaderTextToday: { color: COLORS.primary },
   dayHeaderDate: { fontSize: 15, fontWeight: '500', color: COLORS.textSecondary },
+  dayHeaderDateToday: { color: COLORS.primary, fontWeight: '600' },
   todayBadge: { backgroundColor: COLORS.primary, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 2, marginLeft: 8 },
   todayBadgeText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   mealSection: { marginBottom: 16 },

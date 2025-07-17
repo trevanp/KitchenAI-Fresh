@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   Share,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,22 +22,55 @@ import {
   BORDER_RADIUS,
   SHADOWS,
 } from '../components/DesignSystem';
-import { getRecipeInformation } from '../services/spoonacularService';
+import { 
+  getRecipeInformation, 
+  isRecipeSaved, 
+  saveRecipe, 
+  removeRecipe,
+  addRecipeRating,
+  addRecipeNote,
+  markRecipeAsCooked,
+  getSimilarRecipes
+} from '../services/spoonacularService';
+import { usePantry } from '../PantryContext';
 
 const { width, height } = Dimensions.get('window');
 
 export default function RecipeDetailScreen({ route, navigation }) {
   const { recipeId, recipeTitle, recipeImage, selectedIngredients } = route.params;
+  const { pantryItems } = usePantry();
   
   const [recipe, setRecipe] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isSaved, setIsSaved] = useState(false);
   const [isInMealPlan, setIsInMealPlan] = useState(false);
+  const [servings, setServings] = useState(4);
+  const [ingredientAvailability, setIngredientAvailability] = useState([]);
+  const [cookModeActive, setCookModeActive] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [showVoiceMode, setShowVoiceMode] = useState(false);
+  const [similarRecipes, setSimilarRecipes] = useState([]);
+  const [userRating, setUserRating] = useState(0);
+  const [userNote, setUserNote] = useState('');
 
   useEffect(() => {
     fetchRecipeDetails();
+    checkSavedStatus();
   }, [recipeId]);
+
+  useEffect(() => {
+    if (recipe) {
+      loadSimilarRecipes();
+    }
+  }, [recipe]);
+
+  useEffect(() => {
+    if (recipe) {
+      checkIngredientAvailability();
+      setServings(recipe.servings || 4);
+    }
+  }, [recipe, pantryItems]);
 
   const fetchRecipeDetails = async () => {
     try {
@@ -59,18 +93,81 @@ export default function RecipeDetailScreen({ route, navigation }) {
     }
   };
 
-  const toggleSaveRecipe = () => {
-    setIsSaved(!isSaved);
-    // TODO: Implement save to cookbook functionality
-    Alert.alert(
-      isSaved ? 'Removed from Cookbook' : 'Saved to Cookbook',
-      isSaved ? 'Recipe removed from your cookbook.' : 'Recipe saved to your cookbook!'
-    );
+  const checkSavedStatus = async () => {
+    try {
+      const saved = await isRecipeSaved(recipeId);
+      setIsSaved(saved);
+    } catch (error) {
+      console.error('Error checking saved status:', error);
+      setIsSaved(false);
+    }
+  };
+
+  const loadSimilarRecipes = async () => {
+    try {
+      const similar = await getSimilarRecipes(recipeId, 3);
+      setSimilarRecipes(similar);
+    } catch (error) {
+      console.error('Error loading similar recipes:', error);
+    }
+  };
+
+  const checkIngredientAvailability = () => {
+    if (!recipe || !pantryItems) return;
+
+    const availability = recipe.extendedIngredients?.map(ingredient => {
+      const normalizedIngredientName = ingredient.name.toLowerCase().trim();
+      const available = pantryItems.some(item => {
+        const normalizedItemName = item.name.toLowerCase().trim();
+        return normalizedItemName.includes(normalizedIngredientName) || 
+               normalizedIngredientName.includes(normalizedItemName);
+      });
+
+      return {
+        ...ingredient,
+        available,
+        adjustedQuantity: getAdjustedQuantity(ingredient.amount, recipe.servings || 4, servings)
+      };
+    }) || [];
+
+    setIngredientAvailability(availability);
+  };
+
+  const getAdjustedQuantity = (originalAmount, originalServings, newServings) => {
+    if (!originalAmount || !originalServings) return originalAmount;
+    const multiplier = newServings / originalServings;
+    return (originalAmount * multiplier).toFixed(1);
+  };
+
+  const getAvailabilityPercentage = () => {
+    if (!ingredientAvailability.length) return 0;
+    const availableCount = ingredientAvailability.filter(item => item.available).length;
+    return Math.round((availableCount / ingredientAvailability.length) * 100);
+  };
+
+  const getMissingIngredients = () => {
+    return ingredientAvailability.filter(ingredient => !ingredient.available);
+  };
+
+  const toggleSaveRecipe = async () => {
+    try {
+      if (isSaved) {
+        await removeRecipe(recipeId);
+        setIsSaved(false);
+        Alert.alert('Removed from Cookbook', 'Recipe removed from your cookbook.');
+      } else {
+        await saveRecipe(recipeId);
+        setIsSaved(true);
+        Alert.alert('Saved to Cookbook', 'Recipe saved to your cookbook!');
+      }
+    } catch (error) {
+      console.error('Error toggling save recipe:', error);
+      Alert.alert('Error', 'Failed to update recipe status. Please try again.');
+    }
   };
 
   const toggleMealPlan = () => {
     setIsInMealPlan(!isInMealPlan);
-    // TODO: Implement meal plan functionality
     Alert.alert(
       isInMealPlan ? 'Removed from Meal Plan' : 'Added to Meal Plan',
       isInMealPlan ? 'Recipe removed from your meal plan.' : 'Recipe added to your meal plan!'
@@ -78,15 +175,12 @@ export default function RecipeDetailScreen({ route, navigation }) {
   };
 
   const addMissingIngredientsToGroceryList = () => {
-    if (!recipe) return;
-    
-    const missingIngredients = recipe.missedIngredients || [];
+    const missingIngredients = getMissingIngredients();
     if (missingIngredients.length === 0) {
       Alert.alert('No Missing Ingredients', 'You have all the ingredients needed for this recipe!');
       return;
     }
     
-    // TODO: Implement add to grocery list functionality
     Alert.alert(
       'Added to Grocery List',
       `${missingIngredients.length} missing ingredient(s) added to your grocery list.`
@@ -106,12 +200,33 @@ export default function RecipeDetailScreen({ route, navigation }) {
     }
   };
 
-  const hasIngredient = (ingredientName) => {
-    if (!selectedIngredients) return false;
-    return selectedIngredients.some(ing => 
-      ingredientName.toLowerCase().includes(ing.name.toLowerCase()) ||
-      ing.name.toLowerCase().includes(ingredientName.toLowerCase())
-    );
+  const adjustServings = (newServings) => {
+    if (newServings < 1) return;
+    setServings(newServings);
+  };
+
+  const startCooking = async () => {
+    setCookModeActive(true);
+    setCurrentStep(0);
+    // Mark as cooked when user starts cooking
+    try {
+      await markRecipeAsCooked(recipeId);
+    } catch (error) {
+      console.error('Error marking recipe as cooked:', error);
+      // Continue with cooking mode even if marking as cooked fails
+    }
+  };
+
+  const nextStep = () => {
+    if (currentStep < (recipe.analyzedInstructions?.[0]?.steps?.length || 0) - 1) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const previousStep = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
   };
 
   const formatTime = (minutes) => {
@@ -130,6 +245,13 @@ export default function RecipeDetailScreen({ route, navigation }) {
     if (readyInMinutes <= 30) return 'Medium';
     if (readyInMinutes <= 60) return 'Hard';
     return 'Expert';
+  };
+
+  const getAvailabilityStatus = () => {
+    const percentage = getAvailabilityPercentage();
+    if (percentage >= 80) return { text: 'Ready to Cook!', icon: '✅', color: '#10B981' };
+    if (percentage >= 50) return { text: 'Almost Ready', icon: '⚠️', color: '#F59E0B' };
+    return { text: 'Missing Ingredients', icon: '❌', color: '#EF4444' };
   };
 
   if (isLoading) {
@@ -160,10 +282,13 @@ export default function RecipeDetailScreen({ route, navigation }) {
     );
   }
 
+  const availabilityStatus = getAvailabilityStatus();
+  const missingIngredients = getMissingIngredients();
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header Image */}
+        {/* Hero Image */}
         <View style={styles.imageContainer}>
           <Image 
             source={{ uri: recipe.image || recipeImage }} 
@@ -201,6 +326,12 @@ export default function RecipeDetailScreen({ route, navigation }) {
                 color={isSaved ? "#EF4444" : COLORS.white} 
               />
             </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={startCooking}
+            >
+              <Ionicons name="restaurant" size={24} color={COLORS.white} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -217,7 +348,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
             </View>
             <View style={styles.infoItem}>
               <Ionicons name="people-outline" size={16} color={COLORS.textSecondary} />
-              <Text style={styles.infoText}>{recipe.servings || 'N/A'} servings</Text>
+              <Text style={styles.infoText}>{servings} servings</Text>
             </View>
             <View style={styles.infoItem}>
               <Ionicons name="trending-up-outline" size={16} color={COLORS.textSecondary} />
@@ -225,62 +356,144 @@ export default function RecipeDetailScreen({ route, navigation }) {
             </View>
           </View>
 
-          {/* Dietary Tags */}
-          {recipe.diets && recipe.diets.length > 0 && (
-            <View style={styles.dietaryTags}>
-              {recipe.diets.slice(0, 3).map((diet, index) => (
-                <View key={index} style={styles.dietaryTag}>
-                  <Text style={styles.dietaryTagText}>{diet}</Text>
-                </View>
-              ))}
+          {/* Serving Size Adjuster */}
+          <View style={styles.servingAdjuster}>
+            <Text style={styles.servingLabel}>Servings:</Text>
+            <TouchableOpacity 
+              style={styles.servingButton}
+              onPress={() => adjustServings(servings - 1)}
+            >
+              <Ionicons name="remove" size={20} color={COLORS.primary} />
+            </TouchableOpacity>
+            <Text style={styles.servingCount}>{servings}</Text>
+            <TouchableOpacity 
+              style={styles.servingButton}
+              onPress={() => adjustServings(servings + 1)}
+            >
+              <Ionicons name="add" size={20} color={COLORS.primary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Availability Summary */}
+          <View style={styles.availabilitySummary}>
+            <View style={styles.availabilityHeader}>
+              <Text style={styles.availabilityIcon}>{availabilityStatus.icon}</Text>
+              <View style={styles.availabilityText}>
+                <Text style={styles.availabilityTitle}>{availabilityStatus.text}</Text>
+                <Text style={styles.availabilitySubtitle}>
+                  {getAvailabilityPercentage()}% ingredients available ({ingredientAvailability.filter(i => i.available).length}/{ingredientAvailability.length})
+                </Text>
+              </View>
             </View>
-          )}
+            
+            {missingIngredients.length > 0 && (
+              <TouchableOpacity 
+                style={styles.addMissingButton}
+                onPress={addMissingIngredientsToGroceryList}
+              >
+                <Ionicons name="list" size={16} color={COLORS.white} />
+                <Text style={styles.addMissingText}>
+                  Add {missingIngredients.length} Missing Items to List
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           {/* Ingredients Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Ingredients</Text>
             <View style={styles.ingredientsList}>
-              {recipe.extendedIngredients?.map((ingredient, index) => {
-                const hasIngredientItem = hasIngredient(ingredient.name);
-                return (
-                  <View key={index} style={styles.ingredientItem}>
-                    <View style={styles.ingredientInfo}>
-                      <Ionicons 
-                        name={hasIngredientItem ? "checkmark-circle" : "cart-outline"} 
-                        size={20} 
-                        color={hasIngredientItem ? "#10B981" : "#EF4444"} 
-                      />
-                      <Text style={[
-                        styles.ingredientText,
-                        hasIngredientItem && styles.ingredientTextAvailable
-                      ]}>
-                        {ingredient.original}
+              {ingredientAvailability.map((ingredient, index) => (
+                <View 
+                  key={index} 
+                  style={[
+                    styles.ingredientItem,
+                    ingredient.available ? styles.ingredientAvailable : styles.ingredientMissing
+                  ]}
+                >
+                  <View style={styles.ingredientInfo}>
+                    <Ionicons 
+                      name={ingredient.available ? "checkmark-circle" : "close-circle"} 
+                      size={20} 
+                      color={ingredient.available ? "#10B981" : "#EF4444"} 
+                    />
+                    <View style={styles.ingredientDetails}>
+                      <Text style={styles.ingredientAmount}>
+                        {ingredient.adjustedQuantity} {ingredient.unit}
                       </Text>
+                      <Text style={styles.ingredientName}>{ingredient.name}</Text>
                     </View>
-                    {!hasIngredientItem && (
-                      <TouchableOpacity style={styles.addToGroceryButton}>
-                        <Ionicons name="add" size={16} color={COLORS.primary} />
-                      </TouchableOpacity>
-                    )}
                   </View>
-                );
-              })}
+                  <Text style={[
+                    styles.ingredientStatus,
+                    ingredient.available ? styles.statusHave : styles.statusNeed
+                  ]}>
+                    {ingredient.available ? 'Have it' : 'Need it'}
+                  </Text>
+                </View>
+              ))}
             </View>
           </View>
 
           {/* Instructions Section */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Instructions</Text>
-            <View style={styles.instructionsList}>
-              {recipe.analyzedInstructions?.[0]?.steps?.map((step, index) => (
-                <View key={index} style={styles.instructionStep}>
-                  <View style={styles.stepNumber}>
-                    <Text style={styles.stepNumberText}>{index + 1}</Text>
-                  </View>
-                  <Text style={styles.instructionText}>{step.step}</Text>
-                </View>
-              ))}
+            <View style={styles.instructionsHeader}>
+              <Text style={styles.sectionTitle}>Instructions</Text>
+              <TouchableOpacity 
+                style={styles.voiceModeButton}
+                onPress={() => setShowVoiceMode(!showVoiceMode)}
+              >
+                <Ionicons name="mic" size={20} color={COLORS.primary} />
+                <Text style={styles.voiceModeText}>Voice Mode</Text>
+              </TouchableOpacity>
             </View>
+            
+            {cookModeActive ? (
+              <View style={styles.cookModeContainer}>
+                <View style={styles.cookModeStep}>
+                  <Text style={styles.cookModeStepNumber}>Step {currentStep + 1}</Text>
+                  <Text style={styles.cookModeStepText}>
+                    {recipe.analyzedInstructions?.[0]?.steps?.[currentStep]?.step || 'No instructions available'}
+                  </Text>
+                </View>
+                <View style={styles.cookModeControls}>
+                  <TouchableOpacity 
+                    style={[styles.cookModeButton, currentStep === 0 && styles.cookModeButtonDisabled]}
+                    onPress={previousStep}
+                    disabled={currentStep === 0}
+                  >
+                    <Ionicons name="chevron-back" size={24} color={COLORS.white} />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.cookModeButton}
+                    onPress={() => setCookModeActive(false)}
+                  >
+                    <Ionicons name="close" size={24} color={COLORS.white} />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[
+                      styles.cookModeButton, 
+                      currentStep >= (recipe.analyzedInstructions?.[0]?.steps?.length || 0) - 1 && styles.cookModeButtonDisabled
+                    ]}
+                    onPress={nextStep}
+                    disabled={currentStep >= (recipe.analyzedInstructions?.[0]?.steps?.length || 0) - 1}
+                  >
+                    <Ionicons name="chevron-forward" size={24} color={COLORS.white} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.instructionsList}>
+                {recipe.analyzedInstructions?.[0]?.steps?.map((step, index) => (
+                  <View key={index} style={styles.instructionStep}>
+                    <View style={styles.stepNumber}>
+                      <Text style={styles.stepNumberText}>{index + 1}</Text>
+                    </View>
+                    <Text style={styles.instructionText}>{step.step}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
 
           {/* Nutrition Section */}
@@ -304,29 +517,32 @@ export default function RecipeDetailScreen({ route, navigation }) {
 
       {/* Bottom Action Bar */}
       <View style={styles.bottomActionBar}>
-        <TouchableOpacity 
-          style={styles.mealPlanButton}
-          onPress={toggleMealPlan}
-        >
-          <Ionicons 
-            name={isInMealPlan ? "calendar" : "calendar-outline"} 
-            size={20} 
-            color={isInMealPlan ? COLORS.white : COLORS.primary} 
-          />
-          <Text style={[
-            styles.mealPlanButtonText,
-            isInMealPlan && styles.mealPlanButtonTextActive
-          ]}>
-            {isInMealPlan ? 'In Meal Plan' : 'Add to Meal Plan'}
-          </Text>
-        </TouchableOpacity>
+        {missingIngredients.length > 0 ? (
+          <TouchableOpacity 
+            style={styles.actionButtonSecondary}
+            onPress={addMissingIngredientsToGroceryList}
+          >
+            <Ionicons name="cart" size={20} color={COLORS.primary} />
+            <Text style={styles.actionButtonSecondaryText}>
+              Add Missing Items ({missingIngredients.length})
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity 
+            style={styles.actionButtonSecondary}
+            onPress={() => {}}
+          >
+            <Ionicons name="cart" size={20} color={COLORS.primary} />
+            <Text style={styles.actionButtonSecondaryText}>Shopping List</Text>
+          </TouchableOpacity>
+        )}
         
         <TouchableOpacity 
-          style={styles.groceryButton}
-          onPress={addMissingIngredientsToGroceryList}
+          style={styles.actionButtonPrimary}
+          onPress={startCooking}
         >
-          <Ionicons name="cart" size={20} color={COLORS.white} />
-          <Text style={styles.groceryButtonText}>Add Missing to Grocery List</Text>
+          <Ionicons name="restaurant" size={20} color={COLORS.white} />
+          <Text style={styles.actionButtonPrimaryText}>Start Cooking</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -596,6 +812,193 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   groceryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.white,
+  },
+  servingAdjuster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginBottom: 20,
+  },
+  servingLabel: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+  },
+  servingButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  servingCount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+  },
+  availabilitySummary: {
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  availabilityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  availabilityIcon: {
+    fontSize: 24,
+  },
+  availabilityText: {
+    flex: 1,
+  },
+  availabilityTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+  },
+  availabilitySubtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  addMissingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  addMissingText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  ingredientAvailable: {
+    borderColor: '#10B981',
+    borderWidth: 2,
+  },
+  ingredientMissing: {
+    borderColor: '#EF4444',
+    borderWidth: 2,
+  },
+  ingredientDetails: {
+    flex: 1,
+  },
+  ingredientAmount: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  ingredientName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+  },
+  ingredientStatus: {
+    fontSize: 14,
+    fontWeight: '600',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  statusHave: {
+    backgroundColor: '#E0F2F7',
+    color: '#10B981',
+  },
+  statusNeed: {
+    backgroundColor: '#FEE2E2',
+    color: '#EF4444',
+  },
+  instructionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  voiceModeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  voiceModeText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  cookModeContainer: {
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  cookModeStep: {
+    marginBottom: 16,
+  },
+  cookModeStepNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+  },
+  cookModeStepText: {
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    lineHeight: 24,
+  },
+  cookModeControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  cookModeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cookModeButtonDisabled: {
+    opacity: 0.5,
+  },
+  actionButtonSecondary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.background,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  actionButtonSecondaryText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  actionButtonPrimary: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  actionButtonPrimaryText: {
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.white,

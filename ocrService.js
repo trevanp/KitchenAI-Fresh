@@ -691,41 +691,74 @@ const categorizeItem = (itemName) => {
     return 'Produce';
   }
   
-  // Dairy & Eggs
+  // Dairy
   if (name.includes('milk') || name.includes('cheese') || name.includes('yogurt') || 
       name.includes('egg') || name.includes('butter') || name.includes('cream') ||
       name.includes('sour cream') || name.includes('cottage cheese') || name.includes('half')) {
-    return 'Dairy & Eggs';
+    return 'Dairy';
   }
   
-  // Meat & Seafood
+  // Protein
   if (name.includes('chicken') || name.includes('beef') || name.includes('pork') || 
       name.includes('fish') || name.includes('salmon') || name.includes('turkey') ||
       name.includes('ham') || name.includes('bacon') || name.includes('sausage') ||
       name.includes('steak') || name.includes('ground')) {
-    return 'Meat & Seafood';
+    return 'Protein';
   }
   
-  // Pantry Staples
+  // Grains & Breads
   if (name.includes('bread') || name.includes('rice') || name.includes('pasta') || 
-      name.includes('flour') || name.includes('sugar') || name.includes('oil') ||
-      name.includes('sauce') || name.includes('soup') || name.includes('can') ||
-      name.includes('bean') || name.includes('cereal') || name.includes('oat')) {
-    return 'Pantry Staples';
+      name.includes('cereal') || name.includes('oat') || name.includes('tortilla') ||
+      name.includes('bagel') || name.includes('noodle')) {
+    return 'Grains & Breads';
   }
   
-  // Beverages
+  // Baking & Flours
+  if (name.includes('flour') || name.includes('sugar') || name.includes('baking') ||
+      name.includes('vanilla') || name.includes('chocolate') || name.includes('cocoa') ||
+      name.includes('yeast') || name.includes('baking powder') || name.includes('baking soda')) {
+    return 'Baking & Flours';
+  }
+  
+  // Canned & Jarred Goods
+  if (name.includes('soup') || name.includes('can') || name.includes('bean') ||
+      name.includes('tomato') || name.includes('corn') || name.includes('peas') ||
+      name.includes('tuna') || name.includes('sardine') || name.includes('pickle')) {
+    return 'Canned & Jarred Goods';
+  }
+  
+  // Oils, Vinegars & Fats
+  if (name.includes('oil') || name.includes('vinegar') || name.includes('olive') ||
+      name.includes('vegetable oil') || name.includes('sesame oil')) {
+    return 'Oils, Vinegars & Fats';
+  }
+  
+  // Condiments & Sauces
+  if (name.includes('sauce') || name.includes('ketchup') || name.includes('mustard') ||
+      name.includes('mayo') || name.includes('soy sauce') || name.includes('hot sauce') ||
+      name.includes('bbq') || name.includes('ranch') || name.includes('dressing')) {
+    return 'Condiments & Sauces';
+  }
+  
+  // Spices & Seasonings
+  if (name.includes('salt') || name.includes('pepper') || name.includes('spice') ||
+      name.includes('herb') || name.includes('cumin') || name.includes('oregano') ||
+      name.includes('basil') || name.includes('thyme') || name.includes('paprika')) {
+    return 'Spices & Seasonings';
+  }
+  
+  // Drinks & Beverages
   if (name.includes('juice') || name.includes('soda') || name.includes('water') || 
       name.includes('coffee') || name.includes('tea') || name.includes('beer') ||
       name.includes('wine') || name.includes('drink') || name.includes('bottle')) {
-    return 'Beverages';
+    return 'Drinks & Beverages';
   }
   
-  // Snacks
+  // Snacks & Treats
   if (name.includes('chip') || name.includes('crack') || name.includes('cookie') || 
       name.includes('candy') || name.includes('popcorn') || name.includes('nut') ||
       name.includes('snack') || name.includes('bar') || name.includes('pretzel')) {
-    return 'Snacks';
+    return 'Snacks & Treats';
   }
   
   // Frozen
@@ -886,14 +919,14 @@ export const mockExtractTextFromImage = async (imageUri) => {
       name: 'Whole Milk',
       quantity: '1 gallon',
       price: 4.99,
-      category: 'Dairy & Eggs',
+      category: 'Dairy',
       confidence: 'high'
     },
     {
       name: 'Bread',
       quantity: '1 loaf',
       price: 2.99,
-      category: 'Pantry Staples',
+      category: 'Grains & Breads',
       confidence: 'high'
     },
     {
@@ -907,28 +940,28 @@ export const mockExtractTextFromImage = async (imageUri) => {
       name: 'Eggs',
       quantity: '1 dozen',
       price: 3.49,
-      category: 'Dairy & Eggs',
+      category: 'Dairy',
       confidence: 'high'
     },
     {
       name: 'Chicken Breast',
       quantity: '2 lbs',
       price: 8.99,
-      category: 'Meat & Seafood',
+      category: 'Protein',
       confidence: 'high'
     },
     {
       name: 'Orange Juice',
       quantity: '1/2 gallon',
       price: 3.99,
-      category: 'Beverages',
+      category: 'Drinks & Beverages',
       confidence: 'medium'
     },
     {
       name: 'Crackers',
       quantity: '1 box',
       price: 2.49,
-      category: 'Snacks',
+      category: 'Snacks & Treats',
       confidence: 'medium'
     }
   ];

@@ -7,6 +7,10 @@ A React Native Expo app that helps you manage your kitchen inventory, discover r
 - **Pantry Management**: Scan receipts, barcodes, or manually add items to your pantry
 - **Recipe Discovery**: Find recipes based on ingredients you have using Spoonacular API
 - **Smart OCR**: Extract grocery items from receipt photos using Google Vision API
+- **AI-Powered Insights**: Get intelligent suggestions about your pantry and meal opportunities
+- **Smart Shopping Lists**: Generate intelligent shopping lists based on your pantry and selected recipes
+- **Recipe Matching**: AI-powered analysis of which recipes you can make with your current ingredients
+- **Ingredient Substitutions**: Get smart substitution suggestions when you're missing ingredients
 - **Recipe Collection**: Save and organize your favorite recipes
 - **Meal Planning**: Plan your meals for the week (coming soon)
 - **User Profile**: Manage your preferences and settings (coming soon)
@@ -19,6 +23,7 @@ A React Native Expo app that helps you manage your kitchen inventory, discover r
 - **Image Processing**: Expo Image Picker & Image Manipulator
 - **OCR**: Google Vision API
 - **Recipe API**: Spoonacular API
+- **AI Integration**: OpenAI GPT-3.5-turbo API
 - **Design System**: Custom components with consistent styling
 
 ## Prerequisites
@@ -63,6 +68,9 @@ GOOGLE_VISION_API_KEY=your_google_vision_api_key_here
 
 # Spoonacular API Key (for recipe discovery)
 SPOONACULAR_API_KEY=your_spoonacular_api_key_here
+
+# OpenAI API Key (for AI-powered features)
+OPENAI_API_KEY=your_openai_api_key_here
 ```
 
 ### 4. Get API Keys
@@ -79,6 +87,15 @@ SPOONACULAR_API_KEY=your_spoonacular_api_key_here
 2. Sign up for a free account
 3. Get your API key from the dashboard
 4. Add the key to your `.env` file
+
+#### OpenAI API (Optional - for AI-powered features)
+1. Go to [OpenAI Platform](https://platform.openai.com/)
+2. Sign up or log in to your account
+3. Navigate to "API Keys" in the left sidebar
+4. Click "Create new secret key"
+5. Copy your API key (it starts with `sk-`)
+6. Add the key to your `.env` file
+7. **Important**: Add your API key to `services/openaiService.js` as well
 
 ### 5. Start the Development Server
 
@@ -99,11 +116,17 @@ KitchenAI-Fresh/
 ├── components/
 │   └── DesignSystem.js          # Shared design system components
 ├── screens/
-│   ├── ExploreScreen.js         # Recipe discovery
+│   ├── ExploreScreen.js         # Recipe discovery with AI insights
 │   ├── CookbookScreen.js        # Saved recipes
 │   ├── MealPlanScreen.js        # Meal planning (placeholder)
-│   ├── PantryScreen.js          # Inventory management
+│   ├── PantryScreen.js          # Inventory management with AI insights
+│   ├── GroceryListScreen.js     # Smart shopping lists with AI
 │   └── ProfileScreen.js         # User profile (placeholder)
+├── services/
+│   ├── openaiService.js         # OpenAI API integration
+│   ├── spoonacularService.js    # Recipe API integration
+│   ├── pantryEssentialsService.js # Pantry essentials management
+│   └── quizService.js           # Pantry quiz functionality
 ├── App.js                       # Main app component with navigation
 ├── ocrService.js               # Google Vision API integration
 ├── .env                        # Environment variables (create this)

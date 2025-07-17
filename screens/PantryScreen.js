@@ -15,6 +15,7 @@ import {
   Image,
   Animated,
 } from 'react-native';
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { usePantry } from '../PantryContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -38,19 +39,27 @@ import {
   SHADOWS,
 } from '../components/DesignSystem';
 import { processReceiptImage } from '../ocrService';
+import openaiService from '../services/openaiService';
+import smartPantry from '../services/smartPantrySystem';
 import GroceryListScreen from './GroceryListScreen';
 
 // No dummy data - only user-added items will appear here
 const sampleItems = [];
 
-// Food group configuration with icons and colors
+// New 12-category pantry system with icons and colors
 const FOOD_GROUPS = {
-  'Produce': { icon: '🥕', color: '#22C55E', backgroundColor: '#F0FDF4' },
-  'Proteins': { icon: '🥩', color: '#F87171', backgroundColor: '#FEF2F2' },
-  'Dairy & Eggs': { icon: '🥛', color: '#60A5FA', backgroundColor: '#EFF6FF' },
-  'Grains & Starches': { icon: '🌾', color: '#8B5CF6', backgroundColor: '#F5F3FF' },
-  'Pantry Staples': { icon: '🥫', color: '#F59E0B', backgroundColor: '#FFFBEB' },
-  'Condiments & Seasonings': { icon: '🧄', color: '#EC4899', backgroundColor: '#FDF2F8' },
+  'Produce': { icon: '🥬', color: '#22C55E', backgroundColor: '#F0FDF4' },
+  'Protein': { icon: '🥩', color: '#F87171', backgroundColor: '#FEF2F2' },
+  'Dairy': { icon: '🥛', color: '#60A5FA', backgroundColor: '#EFF6FF' },
+  'Grains & Breads': { icon: '🍞', color: '#8B5CF6', backgroundColor: '#F5F3FF' },
+  'Canned & Jarred Goods': { icon: '🥫', color: '#F59E0B', backgroundColor: '#FFFBEB' },
+  'Baking & Flours': { icon: '🧁', color: '#EC4899', backgroundColor: '#FDF2F8' },
+  'Spices & Seasonings': { icon: '🧂', color: '#A855F7', backgroundColor: '#FAF5FF' },
+  'Oils, Vinegars & Fats': { icon: '🫒', color: '#F97316', backgroundColor: '#FFF7ED' },
+  'Condiments & Sauces': { icon: '🍯', color: '#EAB308', backgroundColor: '#FEFCE8' },
+  'Frozen': { icon: '🧊', color: '#06B6D4', backgroundColor: '#ECFEFF' },
+  'Snacks & Treats': { icon: '🍿', color: '#10B981', backgroundColor: '#ECFDF5' },
+  'Drinks & Beverages': { icon: '🥤', color: '#6366F1', backgroundColor: '#EEF2FF' },
 };
 
 // Mock receipt scan results
@@ -73,32 +82,113 @@ const mockBarcodeProduct = {
 const categories = [
   'All',
   'Produce',
-  'Proteins',
-  'Dairy & Eggs',
-  'Grains & Starches',
-  'Pantry Staples',
-  'Condiments & Seasonings',
+  'Protein',
+  'Dairy',
+  'Grains & Breads',
+  'Canned & Jarred Goods',
+  'Baking & Flours',
+  'Spices & Seasonings',
+  'Oils, Vinegars & Fats',
+  'Condiments & Sauces',
+  'Frozen',
+  'Snacks & Treats',
+  'Drinks & Beverages',
   'Other'
 ];
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-function getExpirationColor(days) {
-  if (days === null) return '#6B7280'; // gray for no expiration
-  if (days <= 3) return '#EF4444'; // red for urgent
-  if (days <= 7) return '#F59E0B'; // yellow/orange for warning
-  return '#10B981'; // green for good
-}
+// Migration mapping from old categories to new categories
+const CATEGORY_MIGRATION_MAP = {
+  // Direct mappings
+  'Proteins': 'Protein',
+  'Grains & Starches': 'Grains & Breads',
+  'Dairy & Eggs': 'Dairy',
+  'Pantry Staples': 'Canned & Jarred Goods',
+  'Condiments & Seasonings': 'Spices & Seasonings',
+  'Oils & Vinegars': 'Oils, Vinegars & Fats',
+  'Baking': 'Baking & Flours',
+  
+  // Fallback mappings for any other old categories
+  'Produce': 'Produce', // No change
+  'Spices': 'Spices & Seasonings',
+  'Oils': 'Oils, Vinegars & Fats',
+  'Vinegars': 'Oils, Vinegars & Fats',
+  'Fats': 'Oils, Vinegars & Fats',
+  'Flours': 'Baking & Flours',
+  'Baking Supplies': 'Baking & Flours',
+  'Canned Goods': 'Canned & Jarred Goods',
+  'Jarred Goods': 'Canned & Jarred Goods',
+  'Sauces': 'Condiments & Sauces',
+  'Condiments': 'Condiments & Sauces',
+  'Snacks': 'Snacks & Treats',
+  'Treats': 'Snacks & Treats',
+  'Beverages': 'Drinks & Beverages',
+  'Drinks': 'Drinks & Beverages',
+  'Frozen Foods': 'Frozen',
+  'Frozen Items': 'Frozen',
+};
 
-function getExpirationStatus(days) {
-  if (days === null) return 'No Expiration';
-  if (days <= 3) return 'Expires Soon';
-  if (days <= 7) return 'Use Soon';
-  return 'Fresh';
-}
+// Function to migrate old category names to new ones
+const migrateCategory = (oldCategory) => {
+  if (!oldCategory) return 'Produce'; // Default fallback
+  
+  const newCategory = CATEGORY_MIGRATION_MAP[oldCategory];
+  if (newCategory) {
+    return newCategory;
+  }
+  
+  // If no direct mapping, try to intelligently assign based on category name
+  const lowerCategory = oldCategory.toLowerCase();
+  
+  if (lowerCategory.includes('meat') || lowerCategory.includes('chicken') || lowerCategory.includes('beef') || lowerCategory.includes('fish')) {
+    return 'Protein';
+  }
+  if (lowerCategory.includes('dairy') || lowerCategory.includes('milk') || lowerCategory.includes('cheese') || lowerCategory.includes('egg')) {
+    return 'Dairy';
+  }
+  if (lowerCategory.includes('grain') || lowerCategory.includes('bread') || lowerCategory.includes('pasta') || lowerCategory.includes('rice')) {
+    return 'Grains & Breads';
+  }
+  if (lowerCategory.includes('can') || lowerCategory.includes('jar') || lowerCategory.includes('preserved')) {
+    return 'Canned & Jarred Goods';
+  }
+  if (lowerCategory.includes('bake') || lowerCategory.includes('flour') || lowerCategory.includes('sugar') || lowerCategory.includes('spice')) {
+    return 'Baking & Flours';
+  }
+  if (lowerCategory.includes('oil') || lowerCategory.includes('vinegar') || lowerCategory.includes('fat')) {
+    return 'Oils, Vinegars & Fats';
+  }
+  if (lowerCategory.includes('sauce') || lowerCategory.includes('condiment') || lowerCategory.includes('dressing')) {
+    return 'Condiments & Sauces';
+  }
+  if (lowerCategory.includes('frozen') || lowerCategory.includes('ice')) {
+    return 'Frozen';
+  }
+  if (lowerCategory.includes('snack') || lowerCategory.includes('treat') || lowerCategory.includes('candy')) {
+    return 'Snacks & Treats';
+  }
+  if (lowerCategory.includes('drink') || lowerCategory.includes('beverage') || lowerCategory.includes('juice')) {
+    return 'Drinks & Beverages';
+  }
+  
+  return 'Produce'; // Default fallback
+};
 
-export default function PantryScreen() {
-  const { pantryItems, addPantryItem, removePantryItem, updatePantryItem } = usePantry();
+// Removed expiration-related functions for cleaner UI
+
+export default function PantryScreen({ navigation, route }) {
+  const { 
+    pantryItems, 
+    addPantryItem, 
+    removePantryItem, 
+    updatePantryItem, 
+    quizCompleted,
+    essentialsEnabled,
+    essentialsStats,
+    toggleEssentials,
+    getAllAvailableIngredients
+  } = usePantry();
   const items = pantryItems; // Use pantry items from context
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -110,7 +200,17 @@ export default function PantryScreen() {
   const [currentModal, setCurrentModal] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [optimizedImage, setOptimizedImage] = useState(null);
+  
+  // AI-powered features
+  const [aiInsights, setAiInsights] = useState(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(true);
   const [imageLoading, setImageLoading] = useState(false);
+  
+  // Load AI insights when pantry items change
+  useEffect(() => {
+    loadPantryInsights();
+  }, [items]);
   const [imageOptimizing, setImageOptimizing] = useState(false);
   const [imageError, setImageError] = useState(null);
   const [receiptProcessing, setReceiptProcessing] = useState(false);
@@ -136,42 +236,263 @@ export default function PantryScreen() {
   const [groceryListVisible, setGroceryListVisible] = useState(false);
   const [addItemModalVisible, setAddItemModalVisible] = useState(false);
   const [manualEntryVisible, setManualEntryVisible] = useState(false);
+  
+  // Success message state
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [highlightNewItems, setHighlightNewItems] = useState(false);
+  const [newlyAddedItems, setNewlyAddedItems] = useState([]);
+  const [bannerVisible, setBannerVisible] = useState(false);
+  const bannerAnimation = useRef(new Animated.Value(-100)).current;
+  const bannerOpacity = useRef(new Animated.Value(0)).current;
+  const pulseAnimation = useRef(new Animated.Value(1)).current;
+  
+  // Swipe-to-delete state
+  const [deletedItems, setDeletedItems] = useState([]);
+  const [undoTimeout, setUndoTimeout] = useState(null);
+  const [showUndoToast, setShowUndoToast] = useState(false);
+  const [undoToastAnimation] = useState(new Animated.Value(0));
 
-  // Calculate pantry statistics
+  // Handle route parameters for success messages
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      const params = route?.params;
+      console.log('📱 PantryScreen focus - route params:', params);
+      
+      if (params?.showSuccessMessage) {
+        console.log('🎉 Showing success banner with message:', params.message);
+        setSuccessMessage(params.message || 'Items added successfully!');
+        setHighlightNewItems(params.highlightNewItems || false);
+        setShowSuccessMessage(true);
+        setBannerVisible(true);
+        
+        // Animate banner in
+        Animated.parallel([
+          Animated.timing(bannerAnimation, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(bannerOpacity, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start();
+        
+        // Clear the params after handling
+        navigation.setParams({});
+        
+        // Auto-hide success message after 3 seconds
+        setTimeout(() => {
+          console.log('⏰ Auto-hiding success banner');
+          // Animate banner out
+          Animated.parallel([
+            Animated.timing(bannerAnimation, {
+              toValue: -100,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bannerOpacity, {
+              toValue: 0,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+          ]).start(() => {
+            setBannerVisible(false);
+            setShowSuccessMessage(false);
+            setSuccessMessage('');
+            setHighlightNewItems(false);
+          });
+        }, 3000);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, route, bannerAnimation, bannerOpacity]);
+
+  // Highlight newly added items when coming from quiz
+  useEffect(() => {
+    if (highlightNewItems) {
+      // Get items added in the last 2 minutes (from quiz)
+      const recentItems = pantryItems.filter(item => {
+        const addedTime = new Date(item.addedAt);
+        const now = new Date();
+        const diffMinutes = (now - addedTime) / (1000 * 60);
+        return diffMinutes < 2; // Items added in last 2 minutes
+      });
+      
+      setNewlyAddedItems(recentItems.map(item => item.id));
+      
+      // Start pulse animation
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnimation, {
+            toValue: 1.05,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnimation, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulse.start();
+      
+      // Remove highlight after 5 seconds
+      setTimeout(() => {
+        pulse.stop();
+        setNewlyAddedItems([]);
+        pulseAnimation.setValue(1);
+      }, 5000);
+    }
+  }, [highlightNewItems, pantryItems, pulseAnimation]);
+
+  // Cleanup undo timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (undoTimeout) {
+        clearTimeout(undoTimeout);
+      }
+    };
+  }, [undoTimeout]);
+
+  // Calculate pantry statistics (simplified without expiration)
   const calculateStats = () => {
-    const urgentItems = items.filter(item => item.daysUntilExpiration !== null && item.daysUntilExpiration <= 3);
-    const freshItems = items.filter(item => item.daysUntilExpiration === null || item.daysUntilExpiration > 7);
-    const lowQuantityItems = items.filter(item => {
+    // Add safety check for combinedItems
+    if (!combinedItems || !Array.isArray(combinedItems)) {
+      console.warn('combinedItems is not available for stats calculation');
+      return {
+        total: 0,
+        lowQuantity: 0
+      };
+    }
+    
+    const lowQuantityItems = combinedItems.filter(item => {
       const qty = parseInt(item.quantity);
       return !isNaN(qty) && qty <= 2;
     });
 
     return {
-      urgent: urgentItems.length,
-      fresh: freshItems.length,
+      total: combinedItems.length,
       lowQuantity: lowQuantityItems.length
     };
   };
 
   const stats = calculateStats();
 
+  // Get combined items (user items + essentials when enabled)
+  const getCombinedItems = () => {
+    console.log('🔍 getCombinedItems - essentialsEnabled:', essentialsEnabled);
+    console.log('🔍 getCombinedItems - user items count:', items ? items.length : 'undefined');
+    
+    // Ensure items is always an array and migrate categories
+    const safeItems = (items || []).map(item => ({
+      ...item,
+      category: migrateCategory(item.category) // Apply migration to existing items
+    }));
+    
+    if (!essentialsEnabled) {
+      console.log('🔍 Essentials disabled, returning user items only');
+      return safeItems;
+    }
+    
+    try {
+      // Get essentials from the service
+      const { PANTRY_ESSENTIALS } = require('../services/pantryEssentialsService');
+      
+      // Create essential items with proper formatting and updated categories
+      const essentialItems = PANTRY_ESSENTIALS.map(essential => ({
+        ...essential,
+        id: `essential_${essential.name.toLowerCase().replace(/\s+/g, '_')}`,
+        isEssential: true,
+        source: 'pantry_essentials',
+        addedAt: new Date().toISOString(),
+        daysUntilExpiration: null, // Essentials don't expire
+        category: migrateCategory(essential.category) // Apply migration to essentials
+      }));
+      
+      // Combine user items with essentials, avoiding duplicates
+      const userItemNames = safeItems.map(item => item.name.toLowerCase());
+      const uniqueEssentials = essentialItems.filter(essential => 
+        !userItemNames.includes(essential.name.toLowerCase())
+      );
+      
+      console.log('🔍 Essential items count:', essentialItems.length);
+      console.log('🔍 Unique essentials to add:', uniqueEssentials.length);
+      console.log('🔍 Combined items count:', safeItems.length + uniqueEssentials.length);
+      
+      return [...safeItems, ...uniqueEssentials];
+    } catch (error) {
+      console.error('🔍 Error in getCombinedItems:', error);
+      return safeItems; // Return user items only if essentials fail
+    }
+  };
+
+  const combinedItems = getCombinedItems() || [];
+  
+  // Debug logging
+  console.log('🔍 PANTRY DEBUG ===');
+  console.log('🔍 items:', items);
+  console.log('🔍 items type:', typeof items);
+  console.log('🔍 items is array:', Array.isArray(items));
+  console.log('🔍 combinedItems:', combinedItems);
+  console.log('🔍 combinedItems type:', typeof combinedItems);
+  console.log('🔍 combinedItems is array:', Array.isArray(combinedItems));
+  console.log('🔍 ==================');
+
   // Group items by category
-  const groupedItems = items.reduce((acc, item) => {
+  const groupedItems = (combinedItems || []).reduce((acc, item) => {
     if (!acc[item.category]) {
       acc[item.category] = [];
     }
     acc[item.category].push(item);
     return acc;
   }, {});
+  
+  // Ensure categories are displayed in the correct order
+  const orderedCategories = [
+    'Produce',
+    'Protein', 
+    'Dairy',
+    'Grains & Breads',
+    'Canned & Jarred Goods',
+    'Baking & Flours',
+    'Spices & Seasonings',
+    'Oils, Vinegars & Fats',
+    'Condiments & Sauces',
+    'Frozen',
+    'Snacks & Treats',
+    'Drinks & Beverages'
+  ];
+  
+  // Create ordered grouped items object
+  const orderedGroupedItems = {};
+  orderedCategories.forEach(category => {
+    if (groupedItems[category]) {
+      orderedGroupedItems[category] = groupedItems[category];
+    }
+  });
+  
+  // Add any remaining categories that weren't in the ordered list
+  Object.keys(groupedItems).forEach(category => {
+    if (!orderedCategories.includes(category)) {
+      orderedGroupedItems[category] = groupedItems[category];
+    }
+  });
 
   // Sort items within each category by expiration urgency
   Object.keys(groupedItems).forEach(category => {
-    groupedItems[category].sort((a, b) => {
-      if (a.daysUntilExpiration === null && b.daysUntilExpiration === null) return 0;
-      if (a.daysUntilExpiration === null) return 1;
-      if (b.daysUntilExpiration === null) return -1;
-      return a.daysUntilExpiration - b.daysUntilExpiration;
-    });
+    if (groupedItems[category] && Array.isArray(groupedItems[category])) {
+      groupedItems[category].sort((a, b) => {
+        if (a.daysUntilExpiration === null && b.daysUntilExpiration === null) return 0;
+        if (a.daysUntilExpiration === null) return 1;
+        if (b.daysUntilExpiration === null) return -1;
+        return a.daysUntilExpiration - b.daysUntilExpiration;
+      });
+    }
   });
 
   const toggleSection = (category) => {
@@ -238,6 +559,69 @@ export default function PantryScreen() {
     resetForm();
   };
 
+  const handleTakePantryQuiz = () => {
+    setAddItemModalVisible(false);
+    
+    if (quizCompleted) {
+      // Show retake confirmation
+      Alert.alert(
+        'Retake Pantry Quiz?',
+        'You\'ve already completed the pantry quiz. Taking it again will add new items to your existing pantry.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Retake Quiz',
+            style: 'default',
+            onPress: () => {
+              navigation.navigate('PantryQuiz', { 
+                source: 'plus_menu_retake',
+                returnTo: 'pantry',
+                isRetake: true
+              });
+            }
+          }
+        ]
+      );
+    } else {
+      // Navigate to quiz for first time
+      navigation.navigate('PantryQuiz', { 
+        source: 'plus_menu',
+        returnTo: 'pantry'
+      });
+    }
+  };
+
+  // AI-powered pantry insights
+  const loadPantryInsights = async () => {
+    if (!aiEnabled || items.length === 0) return;
+    
+    setIsAiLoading(true);
+    try {
+      const insights = await openaiService.getPantryInsights(items);
+      setAiInsights(insights);
+      console.log('🤖 Pantry insights loaded:', insights);
+    } catch (error) {
+      console.log('🤖 AI insights unavailable:', error.message);
+      setAiEnabled(false);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  // Smart pantry categorization
+  const smartCategorizeItem = async (itemName) => {
+    if (!aiEnabled || !itemName || itemName.length < 2) return null;
+    
+    try {
+      const validation = await smartPantry.validateAndCategorizeItem(itemName);
+      console.log('🤖 Smart categorization:', validation);
+      return validation;
+    } catch (error) {
+      console.log('🤖 Smart categorization failed:', error.message);
+      return null;
+    }
+  };
+
   const suggestCategory = (itemName) => {
     const name = itemName.toLowerCase();
     
@@ -245,39 +629,85 @@ export default function PantryScreen() {
     if (name.includes('apple') || name.includes('banana') || name.includes('orange') || 
         name.includes('tomato') || name.includes('lettuce') || name.includes('carrot') ||
         name.includes('onion') || name.includes('garlic') || name.includes('potato') ||
-        name.includes('broccoli') || name.includes('spinach') || name.includes('cucumber')) {
+        name.includes('broccoli') || name.includes('spinach') || name.includes('cucumber') ||
+        name.includes('pepper') || name.includes('mushroom') || name.includes('celery')) {
       return 'Produce';
     }
     
-    // Proteins
+    // Protein
     if (name.includes('chicken') || name.includes('beef') || name.includes('pork') ||
         name.includes('fish') || name.includes('salmon') || name.includes('tofu') ||
-        name.includes('egg') || name.includes('turkey') || name.includes('lamb')) {
-      return 'Proteins';
+        name.includes('turkey') || name.includes('lamb') || name.includes('shrimp') ||
+        name.includes('bacon') || name.includes('ham') || name.includes('sausage')) {
+      return 'Protein';
     }
     
-    // Dairy & Eggs
+    // Dairy
     if (name.includes('milk') || name.includes('cheese') || name.includes('yogurt') ||
-        name.includes('butter') || name.includes('cream') || name.includes('egg')) {
-      return 'Dairy & Eggs';
+        name.includes('butter') || name.includes('cream') || name.includes('egg') ||
+        name.includes('sour cream') || name.includes('cottage cheese') || name.includes('heavy cream')) {
+      return 'Dairy';
     }
     
-    // Grains & Starches
+    // Grains & Breads
     if (name.includes('rice') || name.includes('pasta') || name.includes('bread') ||
-        name.includes('flour') || name.includes('oat') || name.includes('quinoa')) {
-      return 'Grains & Starches';
+        name.includes('flour') || name.includes('oat') || name.includes('quinoa') ||
+        name.includes('cereal') || name.includes('tortilla') || name.includes('bagel') ||
+        name.includes('noodle') || name.includes('couscous')) {
+      return 'Grains & Breads';
     }
     
-    // Pantry Staples
-    if (name.includes('oil') || name.includes('sugar') || name.includes('salt') ||
-        name.includes('can') || name.includes('bean') || name.includes('sauce')) {
-      return 'Pantry Staples';
+    // Canned & Jarred Goods
+    if (name.includes('can') || name.includes('bean') || name.includes('tomato') ||
+        name.includes('corn') || name.includes('peas') || name.includes('soup') ||
+        name.includes('tuna') || name.includes('sardine') || name.includes('pickle')) {
+      return 'Canned & Jarred Goods';
     }
     
-    // Condiments & Seasonings
-    if (name.includes('spice') || name.includes('herb') || name.includes('vinegar') ||
-        name.includes('mustard') || name.includes('ketchup') || name.includes('mayo')) {
-      return 'Condiments & Seasonings';
+    // Baking & Flours
+    if (name.includes('sugar') || name.includes('baking') || name.includes('vanilla') ||
+        name.includes('chocolate') || name.includes('cocoa') || name.includes('yeast') ||
+        name.includes('baking powder') || name.includes('baking soda') || name.includes('cornstarch')) {
+      return 'Baking & Flours';
+    }
+    
+    // Spices & Seasonings
+    if (name.includes('salt') || name.includes('pepper') || name.includes('spice') ||
+        name.includes('herb') || name.includes('cumin') || name.includes('oregano') ||
+        name.includes('basil') || name.includes('thyme') || name.includes('paprika')) {
+      return 'Spices & Seasonings';
+    }
+    
+    // Oils, Vinegars & Fats
+    if (name.includes('oil') || name.includes('vinegar') || name.includes('fat') ||
+        name.includes('olive') || name.includes('vegetable oil') || name.includes('sesame oil')) {
+      return 'Oils, Vinegars & Fats';
+    }
+    
+    // Condiments & Sauces
+    if (name.includes('sauce') || name.includes('ketchup') || name.includes('mustard') ||
+        name.includes('mayo') || name.includes('soy sauce') || name.includes('hot sauce') ||
+        name.includes('bbq') || name.includes('ranch') || name.includes('dressing')) {
+      return 'Condiments & Sauces';
+    }
+    
+    // Frozen
+    if (name.includes('frozen') || name.includes('ice cream') || name.includes('popsicle')) {
+      return 'Frozen';
+    }
+    
+    // Snacks & Treats
+    if (name.includes('chip') || name.includes('cracker') || name.includes('popcorn') ||
+        name.includes('candy') || name.includes('chocolate') || name.includes('cookie') ||
+        name.includes('nut') || name.includes('trail mix')) {
+      return 'Snacks & Treats';
+    }
+    
+    // Drinks & Beverages
+    if (name.includes('drink') || name.includes('juice') || name.includes('soda') ||
+        name.includes('water') || name.includes('tea') || name.includes('coffee') ||
+        name.includes('beer') || name.includes('wine') || name.includes('milk')) {
+      return 'Drinks & Beverages';
     }
     
     return 'Produce'; // Default
@@ -289,13 +719,32 @@ export default function PantryScreen() {
       name: text
     }));
     
-    // Auto-suggest category if name is long enough
+    // Use smart categorization if name is long enough
     if (text.length > 2) {
-      const suggestedCategory = suggestCategory(text);
-      setFormData(prev => ({
-        ...prev,
-        category: suggestedCategory
-      }));
+      smartCategorizeItem(text).then(validation => {
+        if (validation && validation.confidence === 'high') {
+          setFormData(prev => ({
+            ...prev,
+            name: validation.corrected_name,
+            category: validation.category
+          }));
+          console.log('🤖 Smart categorization applied:', validation);
+        } else {
+          // Fallback to basic categorization
+          const suggestedCategory = suggestCategory(text);
+          setFormData(prev => ({
+            ...prev,
+            category: suggestedCategory
+          }));
+        }
+      }).catch(error => {
+        // Fallback to basic categorization
+        const suggestedCategory = suggestCategory(text);
+        setFormData(prev => ({
+          ...prev,
+          category: suggestedCategory
+        }));
+      });
     }
   };
 
@@ -308,7 +757,7 @@ export default function PantryScreen() {
     }));
   };
 
-  const handleSaveManualItem = () => {
+  const handleSaveManualItem = async () => {
     if (!formData.name.trim()) {
       Alert.alert('Error', 'Item name is required');
       return;
@@ -324,10 +773,45 @@ export default function PantryScreen() {
         Math.ceil((new Date(formData.expirationDate) - new Date()) / (1000 * 60 * 60 * 24)) : null
     };
 
-    addPantryItem(newItem);
-    setManualEntryVisible(false);
-    resetForm();
-    Alert.alert('Success', `${newItem.name} added to pantry!`);
+    // Check for duplicates
+    const existingItem = findDuplicate(newItem, pantryItems);
+    
+    if (existingItem) {
+      if (existingItem.name.toLowerCase() === newItem.name.toLowerCase()) {
+        // Exact match - auto-merge
+        const mergedQuantity = parseInt(existingItem.quantity || 1) + parseInt(newItem.quantity || 1);
+        updatePantryItem(existingItem.id, { 
+          quantity: mergedQuantity.toString() 
+        });
+        setManualEntryVisible(false);
+        resetForm();
+        Alert.alert('Success', `Updated ${existingItem.name} quantity to ${mergedQuantity}!`);
+      } else {
+        // Similar item - ask user
+        Alert.alert(
+          'Similar Item Found',
+          `"${existingItem.name}" already exists in your pantry. Would you like to add "${newItem.name}" anyway?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Add Anyway',
+              onPress: () => {
+                addPantryItem(newItem);
+                setManualEntryVisible(false);
+                resetForm();
+                Alert.alert('Success', `${newItem.name} added to pantry!`);
+              }
+            }
+          ]
+        );
+      }
+    } else {
+      // No duplicate - add normally
+      addPantryItem(newItem);
+      setManualEntryVisible(false);
+      resetForm();
+      Alert.alert('Success', `${newItem.name} added to pantry!`);
+    }
   };
 
   const openManualForm = () => {
@@ -493,7 +977,7 @@ export default function PantryScreen() {
     setCurrentModal('barcodeResults');
   };
 
-  const addBarcodeItem = () => {
+  const addBarcodeItem = async () => {
     if (barcodeProduct && barcodeQuantity) {
       const newItem = {
         name: barcodeProduct.name,
@@ -503,12 +987,199 @@ export default function PantryScreen() {
         notes: '',
         daysUntilExpiration: null
       };
-      addPantryItem(newItem);
-      closeAllModals();
+
+      // Check for duplicates
+      const existingItem = findDuplicate(newItem, pantryItems);
+      
+      if (existingItem) {
+        if (existingItem.name.toLowerCase() === newItem.name.toLowerCase()) {
+          // Exact match - auto-merge
+          const mergedQuantity = parseInt(existingItem.quantity || 1) + parseInt(newItem.quantity || 1);
+          updatePantryItem(existingItem.id, { 
+            quantity: mergedQuantity.toString() 
+          });
+          closeAllModals();
+          Alert.alert('Success', `Updated ${existingItem.name} quantity to ${mergedQuantity}!`);
+        } else {
+          // Similar item - ask user
+          Alert.alert(
+            'Similar Item Found',
+            `"${existingItem.name}" already exists in your pantry. Would you like to add "${newItem.name}" anyway?`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Add Anyway',
+                onPress: () => {
+                  addPantryItem(newItem);
+                  closeAllModals();
+                  Alert.alert('Success', `${newItem.name} added to pantry!`);
+                }
+              }
+            ]
+          );
+        }
+      } else {
+        // No duplicate - add normally
+        addPantryItem(newItem);
+        closeAllModals();
+        Alert.alert('Success', `${newItem.name} added to pantry!`);
+      }
     }
   };
 
-  const addReceiptItems = () => {
+  // Duplicate detection and handling functions
+  const findDuplicate = (newItem, existingItems) => {
+    return existingItems.find(existing => {
+      // Exact name match (case insensitive)
+      if (existing.name.toLowerCase() === newItem.name.toLowerCase()) {
+        return true;
+      }
+      
+      // Fuzzy matching for similar items (85% similarity)
+      const similarity = calculateSimilarity(existing.name.toLowerCase(), newItem.name.toLowerCase());
+      if (similarity > 0.85) {
+        return true;
+      }
+      
+      // Category + similar name matching (70% similarity)
+      if (existing.category === newItem.category) {
+        const nameSimilarity = calculateSimilarity(existing.name.toLowerCase(), newItem.name.toLowerCase());
+        if (nameSimilarity > 0.7) {
+          return true;
+        }
+      }
+      
+      return false;
+    });
+  };
+
+  const calculateSimilarity = (str1, str2) => {
+    if (str1 === str2) return 1.0;
+    if (str1.length === 0) return 0.0;
+    if (str2.length === 0) return 0.0;
+    
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+    
+    if (longer.length === 0) return 1.0;
+    
+    const editDistance = levenshteinDistance(longer, shorter);
+    return (longer.length - editDistance) / longer.length;
+  };
+
+  const levenshteinDistance = (str1, str2) => {
+    const matrix = [];
+    
+    for (let i = 0; i <= str2.length; i++) {
+      matrix[i] = [i];
+    }
+    
+    for (let j = 0; j <= str1.length; j++) {
+      matrix[0][j] = j;
+    }
+    
+    for (let i = 1; i <= str2.length; i++) {
+      for (let j = 1; j <= str1.length; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+    
+    return matrix[str2.length][str1.length];
+  };
+
+  const processPantryItems = async (newItems, existingPantry) => {
+    const mergedItems = [];
+    const duplicateActions = [];
+    const updates = [];
+
+    // Use smart pantry system to process scanned items
+    try {
+      const scannedItemNames = newItems.map(item => item.name);
+      const smartProcessing = await smartPantry.processScannedIngredients(scannedItemNames);
+      
+      for (let i = 0; i < newItems.length; i++) {
+        const newItem = newItems[i];
+        const processed = smartProcessing.processed_items[i];
+        
+        // Use smart processing results if available
+        const processedItem = {
+          ...newItem,
+          name: processed.corrected_name || newItem.name,
+          category: processed.category || newItem.category,
+          quantity: processed.quantity || newItem.quantity,
+          scanConfidence: processed.confidence
+        };
+        
+        const existingItem = findDuplicate(processedItem, existingPantry);
+        
+        if (existingItem) {
+          // Found duplicate - handle intelligently
+          const action = {
+            type: 'duplicate_found',
+            existing: existingItem,
+            new: processedItem,
+            suggestedAction: 'merge',
+            mergedQuantity: parseInt(existingItem.quantity || 1) + parseInt(processedItem.quantity || 1),
+            message: `Found existing "${existingItem.name}". Update quantity from ${existingItem.quantity || 1} to ${parseInt(existingItem.quantity || 1) + parseInt(processedItem.quantity || 1)}?`
+          };
+          duplicateActions.push(action);
+          
+          // Auto-merge for exact matches
+          if (existingItem.name.toLowerCase() === processedItem.name.toLowerCase()) {
+            updates.push({
+              id: existingItem.id,
+              newQuantity: action.mergedQuantity.toString(),
+              addedQuantity: processedItem.quantity
+            });
+          }
+        } else {
+          // New item - add to pantry
+          mergedItems.push(processedItem);
+        }
+      }
+    } catch (error) {
+      console.log('🤖 Smart processing failed, using basic processing:', error.message);
+      
+      // Fallback to basic processing
+      for (const newItem of newItems) {
+        const existingItem = findDuplicate(newItem, existingPantry);
+        
+        if (existingItem) {
+          const action = {
+            type: 'duplicate_found',
+            existing: existingItem,
+            new: newItem,
+            suggestedAction: 'merge',
+            mergedQuantity: parseInt(existingItem.quantity || 1) + parseInt(newItem.quantity || 1),
+            message: `Found existing "${existingItem.name}". Update quantity from ${existingItem.quantity || 1} to ${parseInt(existingItem.quantity || 1) + parseInt(newItem.quantity || 1)}?`
+          };
+          duplicateActions.push(action);
+          
+          if (existingItem.name.toLowerCase() === newItem.name.toLowerCase()) {
+            updates.push({
+              id: existingItem.id,
+              newQuantity: action.mergedQuantity.toString(),
+              addedQuantity: newItem.quantity
+            });
+          }
+        } else {
+          mergedItems.push(newItem);
+        }
+      }
+    }
+
+    return { mergedItems, duplicateActions, updates };
+  };
+
+  const addReceiptItems = async () => {
     const checkedItems = receiptItems.filter(item => item.checked && item.name.trim());
     
     if (checkedItems.length === 0) {
@@ -523,42 +1194,90 @@ export default function PantryScreen() {
       return;
     }
 
-    // Add items with smart expiration dates
-    let addedCount = 0;
-    checkedItems.forEach(item => {
-      if (item.name.trim()) {
-        const expirationDate = getSmartExpirationDate(item.category);
-        const daysUntilExpiration = expirationDate ? 
-          Math.ceil((new Date(expirationDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+    // Process items with duplicate detection
+    const itemsToAdd = checkedItems.map(item => {
+      const expirationDate = getSmartExpirationDate(item.category);
+      const daysUntilExpiration = expirationDate ? 
+        Math.ceil((new Date(expirationDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
 
-        const newItem = {
-          name: item.name.trim(),
-          category: item.category,
-          quantity: item.quantity || '1',
-          expirationDate: expirationDate,
-          notes: item.isManual ? 'Added manually from receipt scan' : 'Added from receipt scan',
-          daysUntilExpiration: daysUntilExpiration
-        };
-        addPantryItem(newItem);
-        addedCount++;
-      }
+      return {
+        name: item.name.trim(),
+        category: item.category,
+        quantity: item.quantity || '1',
+        expirationDate: expirationDate,
+        notes: item.isManual ? 'Added manually from receipt scan' : 'Added from receipt scan',
+        daysUntilExpiration: daysUntilExpiration
+      };
     });
 
-    // Show success message
-    Alert.alert(
-      'Items Added Successfully!',
-      `Added ${addedCount} item${addedCount > 1 ? 's' : ''} to your pantry from the receipt scan.`,
-      [
-        {
-          text: 'OK',
-          onPress: () => {
-            closeAllModals();
-            // Navigate to Explore to see new recipes
-            // This will trigger the pantry-explore connection
-          }
+    const { mergedItems, duplicateActions, updates } = await processPantryItems(itemsToAdd, pantryItems);
+
+    // Handle duplicates
+    if (duplicateActions.length > 0) {
+      const duplicateNames = duplicateActions.map(d => d.new.name).join(', ');
+      const exactMatches = duplicateActions.filter(d => 
+        d.existing.name.toLowerCase() === d.new.name.toLowerCase()
+      );
+      
+      if (exactMatches.length > 0) {
+        // Auto-merge exact matches
+        exactMatches.forEach(match => {
+          updatePantryItem(match.existing.id, { 
+            quantity: match.mergedQuantity.toString() 
+          });
+        });
+        
+        // Show success message for merged items
+        const mergedCount = exactMatches.length;
+        const newCount = mergedItems.length;
+        
+        let message = '';
+        if (mergedCount > 0 && newCount > 0) {
+          message = `Updated ${mergedCount} existing item${mergedCount > 1 ? 's' : ''} and added ${newCount} new item${newCount > 1 ? 's' : ''} to your pantry.`;
+        } else if (mergedCount > 0) {
+          message = `Updated ${mergedCount} existing item${mergedCount > 1 ? 's' : ''} in your pantry.`;
+        } else {
+          message = `Added ${newCount} new item${newCount > 1 ? 's' : ''} to your pantry.`;
         }
-      ]
-    );
+        
+        Alert.alert('Items Processed Successfully!', message, [
+          { text: 'OK', onPress: () => closeAllModals() }
+        ]);
+      } else {
+        // Show confirmation for potential duplicates
+        Alert.alert(
+          'Duplicate Items Found',
+          `The following items may already exist in your pantry: ${duplicateNames}\n\nWould you like to add them anyway?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Add Anyway',
+              onPress: () => {
+                // Add all items including potential duplicates
+                mergedItems.forEach(item => addPantryItem(item));
+                duplicateActions.forEach(action => addPantryItem(action.new));
+                
+                const totalCount = mergedItems.length + duplicateActions.length;
+                Alert.alert(
+                  'Items Added Successfully!',
+                  `Added ${totalCount} item${totalCount > 1 ? 's' : ''} to your pantry.`,
+                  [{ text: 'OK', onPress: () => closeAllModals() }]
+                );
+              }
+            }
+          ]
+        );
+      }
+    } else {
+      // No duplicates - add all items
+      mergedItems.forEach(item => addPantryItem(item));
+      
+      Alert.alert(
+        'Items Added Successfully!',
+        `Added ${mergedItems.length} item${mergedItems.length > 1 ? 's' : ''} to your pantry from the receipt scan.`,
+        [{ text: 'OK', onPress: () => closeAllModals() }]
+      );
+    }
   };
 
   // Smart expiration date assignment based on food category
@@ -568,18 +1287,28 @@ export default function PantryScreen() {
     switch (category) {
       case 'Produce':
         return new Date(today.getTime() + (7 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 7 days
-      case 'Dairy & Eggs':
+      case 'Dairy':
         return new Date(today.getTime() + (14 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 14 days
-      case 'Proteins':
+      case 'Protein':
         return new Date(today.getTime() + (5 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 5 days
-      case 'Pantry Staples':
+      case 'Grains & Breads':
+        return new Date(today.getTime() + (14 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 14 days
+      case 'Canned & Jarred Goods':
+        return new Date(today.getTime() + (365 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 365 days
+      case 'Baking & Flours':
+        return new Date(today.getTime() + (180 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 180 days
+      case 'Spices & Seasonings':
+        return new Date(today.getTime() + (365 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 365 days
+      case 'Oils, Vinegars & Fats':
+        return new Date(today.getTime() + (180 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 180 days
+      case 'Condiments & Sauces':
         return new Date(today.getTime() + (90 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 90 days
-      case 'Beverages':
-        return new Date(today.getTime() + (30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 30 days
-      case 'Snacks':
-        return new Date(today.getTime() + (60 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 60 days
       case 'Frozen':
         return new Date(today.getTime() + (180 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 180 days
+      case 'Snacks & Treats':
+        return new Date(today.getTime() + (90 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 90 days
+      case 'Drinks & Beverages':
+        return new Date(today.getTime() + (30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 30 days
       default:
         return new Date(today.getTime() + (30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 30 days
     }
@@ -605,6 +1334,16 @@ export default function PantryScreen() {
   };
 
   const openEditModal = (item) => {
+    // Prevent editing of essential items
+    if (item.isEssential || item.source === 'pantry_essentials') {
+      Alert.alert(
+        'Essential Item',
+        'This is a pantry essential and cannot be edited. You can add your own version of this item if needed.',
+        [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
+    
     setEditingItem(item);
     setFormData({
       name: item.name,
@@ -656,47 +1395,223 @@ export default function PantryScreen() {
     );
   };
 
-  const renderItem = ({ item }) => {
-    const daysUntilExpiration = item.daysUntilExpiration;
-    const expirationColor = getExpirationColor(daysUntilExpiration);
-    const expirationStatus = getExpirationStatus(daysUntilExpiration);
-    const isUrgent = daysUntilExpiration !== null && daysUntilExpiration <= 2;
-    const foodGroup = FOOD_GROUPS[item.category] || { icon: '📦', color: '#6B7280', backgroundColor: '#F9FAFB' };
+  // Swipe-to-delete functions
+  const handleSwipeDelete = (item) => {
+    // Prevent deletion of essential items
+    if (item.isEssential || item.source === 'pantry_essentials') {
+      Alert.alert(
+        'Essential Item',
+        'This is a pantry essential and cannot be deleted. You can disable essentials in the toggle above.',
+        [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
+
+    // Store the deleted item for potential undo
+    const deletedItem = { ...item, deletedAt: new Date() };
+    setDeletedItems(prev => [...prev, deletedItem]);
+    
+    // Remove from pantry
+    removePantryItem(item.id);
+    
+    // Show undo toast
+    setShowUndoToast(true);
+    Animated.timing(undoToastAnimation, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+    
+    // Set timeout for permanent deletion
+    const timeout = setTimeout(() => {
+      setDeletedItems(prev => prev.filter(di => di.id !== item.id));
+      setShowUndoToast(false);
+      Animated.timing(undoToastAnimation, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }, 5000);
+    
+    setUndoTimeout(timeout);
+  };
+
+  const handleUndo = () => {
+    if (deletedItems.length > 0) {
+      const lastDeletedItem = deletedItems[deletedItems.length - 1];
+      
+      // Restore the item
+      addPantryItem({
+        name: lastDeletedItem.name,
+        category: lastDeletedItem.category,
+        quantity: lastDeletedItem.quantity,
+        notes: lastDeletedItem.notes,
+        expirationDate: lastDeletedItem.expirationDate,
+        daysUntilExpiration: lastDeletedItem.daysUntilExpiration
+      });
+      
+      // Remove from deleted items
+      setDeletedItems(prev => prev.slice(0, -1));
+      
+      // Clear timeout
+      if (undoTimeout) {
+        clearTimeout(undoTimeout);
+        setUndoTimeout(null);
+      }
+      
+      // Hide toast
+      setShowUndoToast(false);
+      Animated.timing(undoToastAnimation, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
+  const SwipeableItem = ({ item }) => {
+    const translateX = useRef(new Animated.Value(0)).current;
+    const deleteButtonOpacity = useRef(new Animated.Value(0)).current;
+    
+    const onGestureEvent = Animated.event(
+      [{ nativeEvent: { translationX: translateX } }],
+      { useNativeDriver: true }
+    );
+    
+    const onHandlerStateChange = (event) => {
+      if (event.nativeEvent.oldState === State.ACTIVE) {
+        const { translationX } = event.nativeEvent;
+        
+        if (translationX < -100) {
+          // Swipe threshold reached, show delete button
+          Animated.parallel([
+            Animated.timing(translateX, {
+              toValue: -80,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+            Animated.timing(deleteButtonOpacity, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+          ]).start();
+        } else {
+          // Reset position
+          Animated.parallel([
+            Animated.timing(translateX, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+            Animated.timing(deleteButtonOpacity, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }
+      }
+    };
+
+    const handleDeletePress = () => {
+      handleSwipeDelete(item);
+      // Reset position
+      Animated.parallel([
+        Animated.timing(translateX, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(deleteButtonOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    };
+
+    const isNewlyAdded = newlyAddedItems.includes(item.id);
+    const isEssential = item.isEssential || item.source === 'pantry_essentials';
+
+    const ItemComponent = isNewlyAdded ? Animated.View : View;
+    const itemStyle = [
+      styles.itemCard,
+      isNewlyAdded && styles.newlyAddedItem,
+      isEssential && styles.essentialItem,
+      isNewlyAdded && {
+        transform: [{ scale: pulseAnimation }],
+      }
+    ];
 
     return (
-      <TouchableOpacity 
-        style={styles.itemCard}
-        onPress={() => openEditModal(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.itemLeft}>
-          <View style={[styles.itemIcon, { backgroundColor: foodGroup.backgroundColor }]}>
-            <Text style={styles.itemIconText}>{foodGroup.icon}</Text>
-          </View>
-          <View style={styles.itemInfo}>
-            <Text style={styles.itemName}>{item.name}</Text>
-            <Text style={styles.itemQty}>Qty: {item.quantity}</Text>
-          </View>
-        </View>
-        <View style={styles.itemRight}>
-          {isUrgent && (
-            <Text style={styles.urgentWarning}>⚠️</Text>
-          )}
-          <View style={[styles.expBadge, { backgroundColor: expirationColor }]}>
-            <Text style={styles.expBadgeText}>{expirationStatus}</Text>
-          </View>
-          {item.expirationDate && (
-            <Text style={styles.expDateText}>
-              {new Date(item.expirationDate).toLocaleDateString()}
-            </Text>
-          )}
-        </View>
-      </TouchableOpacity>
+      <View style={styles.swipeableContainer}>
+        {/* Delete Button Background */}
+        <Animated.View 
+          style={[
+            styles.deleteButton,
+            {
+              opacity: deleteButtonOpacity,
+            }
+          ]}
+        >
+          <TouchableOpacity 
+            style={styles.deleteButtonTouchable}
+            onPress={handleDeletePress}
+          >
+            <Ionicons name="trash" size={24} color={COLORS.white} />
+            <Text style={styles.deleteButtonText}>Delete</Text>
+          </TouchableOpacity>
+        </Animated.View>
+        
+        {/* Swipeable Item */}
+        <PanGestureHandler
+          onGestureEvent={onGestureEvent}
+          onHandlerStateChange={onHandlerStateChange}
+        >
+          <Animated.View
+            style={[
+              itemStyle,
+              {
+                transform: [{ translateX }],
+              }
+            ]}
+          >
+            <TouchableOpacity 
+              style={styles.itemTouchable}
+              onPress={() => openEditModal(item)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.itemLeft}>
+                <View style={styles.itemInfo}>
+                  <View style={styles.itemNameRow}>
+                    <Text style={styles.itemName}>{item.name}</Text>
+                    {isEssential && (
+                      <View style={styles.essentialBadge}>
+                        <Text style={styles.essentialBadgeIcon}>⭐</Text>
+                        <Text style={styles.essentialBadgeText}>Essential</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.itemQty}>Qty: {item.quantity}</Text>
+                </View>
+              </View>
+              <View style={styles.itemRight}>
+                {/* Removed expiration tags for cleaner UI */}
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+        </PanGestureHandler>
+      </View>
     );
   };
 
+  const renderItem = ({ item }) => {
+    return <SwipeableItem item={item} />;
+  };
+
   const renderCategorySection = (category) => {
-    const items = groupedItems[category] || [];
+    const items = orderedGroupedItems[category] || [];
     const isExpanded = expandedSections[category] !== false; // Default to expanded
     const foodGroup = FOOD_GROUPS[category] || { icon: '📦', color: '#6B7280', backgroundColor: '#F9FAFB' };
 
@@ -765,48 +1680,241 @@ export default function PantryScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
-        <Text style={styles.header}>My Pantry</Text>
-        
-        {/* Search Bar */}
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color={COLORS.textSecondary} style={{ marginRight: 12 }} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search pantry items..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor={COLORS.textSecondary}
-          />
-        </View>
-
-
-
-        {/* Grocery List Button */}
-        <TouchableOpacity 
-          style={styles.groceryBtn}
-          onPress={() => setGroceryListVisible(true)}
+      {/* Success Banner */}
+      {bannerVisible && (
+        <Animated.View 
+          style={[
+            styles.successBanner,
+            {
+              transform: [{ translateY: bannerAnimation }],
+              opacity: bannerOpacity,
+            }
+          ]}
         >
-          <Ionicons name="list" size={20} color={COLORS.textPrimary} style={{ marginRight: 8 }} />
-          <Text style={styles.groceryBtnText}>Grocery List</Text>
-        </TouchableOpacity>
-
-        {/* Category Sections */}
-        {Object.keys(groupedItems).length === 0 ? (
-          <View style={styles.emptyStateContainer}>
-            <Ionicons name="basket-outline" size={64} color={COLORS.textSecondary} />
-            <Text style={styles.emptyStateTitle}>Your pantry is empty</Text>
-            <Text style={styles.emptyStateText}>
-              Add items to your pantry to get recipe suggestions and track your ingredients!
-            </Text>
-            <TouchableOpacity style={styles.emptyStateButton} onPress={openSmartInputModal}>
-              <Ionicons name="add" size={20} color={COLORS.white} />
-              <Text style={styles.emptyStateButtonText}>Add Your First Item</Text>
+          <View style={styles.successContent}>
+            <Ionicons name="checkmark-circle" size={20} color={COLORS.white} />
+            <Text style={styles.successText}>{successMessage}</Text>
+            <TouchableOpacity 
+              style={styles.closeBanner} 
+              onPress={() => {
+                // Animate banner out on manual close
+                Animated.parallel([
+                  Animated.timing(bannerAnimation, {
+                    toValue: -100,
+                    duration: 300,
+                    useNativeDriver: true,
+                  }),
+                  Animated.timing(bannerOpacity, {
+                    toValue: 0,
+                    duration: 300,
+                    useNativeDriver: true,
+                  }),
+                ]).start(() => {
+                  setBannerVisible(false);
+                  setShowSuccessMessage(false);
+                  setSuccessMessage('');
+                  setHighlightNewItems(false);
+                });
+              }}
+            >
+              <Ionicons name="close" size={20} color={COLORS.white} />
             </TouchableOpacity>
           </View>
-        ) : (
-          Object.keys(groupedItems).map(category => renderCategorySection(category))
+        </Animated.View>
+      )}
+
+      {/* Undo Toast */}
+      {showUndoToast && (
+        <Animated.View 
+          style={[
+            styles.undoToast,
+            {
+              opacity: undoToastAnimation,
+              transform: [{ translateY: undoToastAnimation.interpolate({
+                inputRange: [0, 1],
+                outputRange: [100, 0]
+              })}],
+            }
+          ]}
+        >
+          <View style={styles.undoToastContent}>
+            <Ionicons name="information-circle" size={20} color={COLORS.white} />
+            <Text style={styles.undoToastText}>Item deleted</Text>
+            <TouchableOpacity 
+              style={styles.undoButton}
+              onPress={handleUndo}
+            >
+              <Text style={styles.undoButtonText}>UNDO</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      )}
+
+      {/* Header - Clean title only */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>My Pantry</Text>
+        <TouchableOpacity style={styles.menuButton}>
+          <Ionicons name="ellipsis-horizontal" size={24} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Search Bar - Moved down with more spacing */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={20} color={COLORS.textSecondary} style={{ marginRight: 12 }} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search pantry items..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor={COLORS.textSecondary}
+            />
+          </View>
+        </View>
+
+        {/* Action Buttons Row - NEW LAYOUT */}
+        <View style={styles.pantryActions}>
+          <TouchableOpacity 
+            style={styles.groceryListBtn}
+            onPress={() => setGroceryListVisible(true)}
+          >
+            <Ionicons name="list" size={16} color="#DC3545" />
+            <Text style={styles.groceryListBtnText}>Grocery List</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[
+              styles.essentialsToggleBtn,
+              essentialsEnabled ? styles.essentialsToggleBtnEnabled : styles.essentialsToggleBtnDisabled
+            ]}
+            onPress={async () => {
+              console.log('🔧 Essentials toggle pressed - current state:', essentialsEnabled);
+              const result = await toggleEssentials();
+              console.log('🔧 Toggle result:', result);
+              
+              if (result.success) {
+                setSuccessMessage(result.message);
+                setShowSuccessMessage(true);
+                setBannerVisible(true);
+                
+                // Animate banner in
+                Animated.parallel([
+                  Animated.timing(bannerAnimation, {
+                    toValue: 0,
+                    duration: 300,
+                    useNativeDriver: true,
+                  }),
+                  Animated.timing(bannerOpacity, {
+                    toValue: 1,
+                    duration: 300,
+                    useNativeDriver: true,
+                  }),
+                ]).start();
+                
+                // Auto-hide after 3 seconds
+                setTimeout(() => {
+                  Animated.parallel([
+                    Animated.timing(bannerAnimation, {
+                      toValue: -100,
+                      duration: 300,
+                      useNativeDriver: true,
+                    }),
+                    Animated.timing(bannerOpacity, {
+                      toValue: 0,
+                      duration: 300,
+                      useNativeDriver: true,
+                    }),
+                  ]).start(() => {
+                    setBannerVisible(false);
+                    setShowSuccessMessage(false);
+                    setSuccessMessage('');
+                  });
+                }, 3000);
+              } else {
+                Alert.alert('Error', result.message);
+              }
+            }}
+          >
+            <Ionicons 
+              name={essentialsEnabled ? "star" : "star-outline"} 
+              size={16} 
+              color={essentialsEnabled ? "#212529" : "#6C757D"} 
+            />
+            <Text style={[
+              styles.essentialsToggleBtnText,
+              { color: essentialsEnabled ? "#212529" : "#6C757D" }
+            ]}>
+              Essentials {essentialsEnabled ? 'ON' : 'OFF'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* AI Insights Section */}
+        {aiInsights && aiInsights.insights && aiInsights.insights.length > 0 && (
+          <View style={styles.aiInsightsSection}>
+            <View style={styles.aiInsightsHeader}>
+              <Ionicons name="bulb" size={20} color={COLORS.primary} />
+              <Text style={styles.aiInsightsTitle}>AI Kitchen Insights</Text>
+              {isAiLoading && (
+                <ActivityIndicator size="small" color={COLORS.primary} style={{ marginLeft: 8 }} />
+              )}
+            </View>
+            
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.aiInsightsScroll}
+            >
+              {aiInsights.insights.map((insight, index) => (
+                <View key={index} style={[styles.insightCard, styles[`insight${insight.type}`]]}>
+                  <Text style={styles.insightIcon}>{insight.icon}</Text>
+                  <Text style={styles.insightText}>{insight.message}</Text>
+                </View>
+              ))}
+            </ScrollView>
+
+            {aiInsights.quick_stats && (
+              <View style={styles.quickStatsContainer}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{aiInsights.quick_stats.total_possible_meals}</Text>
+                  <Text style={styles.statLabel}>Possible Meals</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{aiInsights.quick_stats.expiring_soon}</Text>
+                  <Text style={styles.statLabel}>Expiring Soon</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={styles.statLabel}>Most Versatile</Text>
+                  <Text style={styles.statIngredient}>{aiInsights.quick_stats.most_versatile_ingredient}</Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Category Sections */}
+                  {Object.keys(orderedGroupedItems).length === 0 ? (
+            <View style={styles.emptyStateContainer}>
+              <Ionicons name="basket-outline" size={64} color={COLORS.textSecondary} />
+              <Text style={styles.emptyStateTitle}>Your pantry is empty</Text>
+              <Text style={styles.emptyStateText}>
+                Add items to your pantry to get recipe suggestions and track your ingredients!
+              </Text>
+              <TouchableOpacity style={styles.emptyStateButton} onPress={openSmartInputModal}>
+                <Ionicons name="add" size={20} color={COLORS.white} />
+                <Text style={styles.emptyStateButtonText}>Add Your First Item</Text>
+              </TouchableOpacity>
+              
+              {/* Helpful tip about essentials */}
+              <View style={styles.essentialsTip}>
+                <Text style={styles.essentialsTipText}>
+                  💡 <Text style={styles.essentialsTipBold}>Tip:</Text> Enable "Essentials" above to add common household items like salt, oil, and eggs automatically!
+                </Text>
+              </View>
+            </View>
+          ) : (
+          Object.keys(orderedGroupedItems).map(category => renderCategorySection(category))
         )}
       </ScrollView>
 
@@ -892,6 +2000,19 @@ export default function PantryScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
               </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.modalOption}
+                onPress={handleTakePantryQuiz}
+              >
+                <View style={styles.modalOptionIcon}>
+                  <Ionicons name="clipboard-outline" size={24} color={COLORS.primary} />
+                </View>
+                <View style={styles.modalOptionContent}>
+                  <Text style={styles.modalOptionTitle}>Take Pantry Quiz</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+              </TouchableOpacity>
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -947,7 +2068,7 @@ export default function PantryScreen() {
               <View style={styles.formField}>
                 <Text style={styles.formLabel}>Category</Text>
                 <View style={styles.categoryPickerContainer}>
-                  {Object.keys(FOOD_GROUPS).map(category => (
+                  {[...orderedCategories, 'Other'].map(category => (
                     <TouchableOpacity
                       key={category}
                       style={[
@@ -956,7 +2077,9 @@ export default function PantryScreen() {
                       ]}
                       onPress={() => setFormData(prev => ({ ...prev, category }))}
                     >
-                      <Text style={styles.categoryIcon}>{FOOD_GROUPS[category].icon}</Text>
+                      <Text style={styles.categoryIcon}>
+                        {FOOD_GROUPS[category] ? FOOD_GROUPS[category].icon : '📦'}
+                      </Text>
                       <Text style={[
                         styles.categoryOptionText,
                         formData.category === category && styles.categoryOptionTextSelected
@@ -1038,7 +2161,7 @@ export default function PantryScreen() {
               <Text style={styles.saveButtonText}>Add to Pantry</Text>
             </TouchableOpacity>
           </View>
-        </SafeAreaView>
+    </SafeAreaView>
       </Modal>
 
       {/* Enhanced OCR Results Confirmation Modal */}
@@ -1152,7 +2275,7 @@ export default function PantryScreen() {
                           style={styles.ocrItemCategoryButton}
                           onPress={() => {
                             // Show category picker
-                            const categoryOptions = Object.keys(FOOD_GROUPS);
+                            const categoryOptions = [...orderedCategories, 'Other'];
                             Alert.alert(
                               'Select Category',
                               'Choose a category for this item:',
@@ -1215,14 +2338,7 @@ export default function PantryScreen() {
                       />
                     </View>
                     
-                    {item.confidence && (
-                      <View style={styles.ocrItemDetailRow}>
-                        <Text style={styles.ocrItemDetailLabel}>Confidence:</Text>
-                        <Text style={styles.ocrItemConfidence}>
-                          {Math.round(item.confidence * 100)}%
-                        </Text>
-                      </View>
-                    )}
+                    {/* Confidence level removed for cleaner UI */}
                   </View>
                 </View>
               ))}
@@ -1325,7 +2441,7 @@ export default function PantryScreen() {
               onPress={retakePhoto}
             >
               <Ionicons name="camera-outline" size={20} color={COLORS.textSecondary} />
-              <Text style={styles.ocrRetakeButtonText}>Retake Photo</Text>
+              <Text style={styles.ocrRetakeButtonText}>Retake</Text>
             </TouchableOpacity>
 
             <TouchableOpacity 
@@ -1373,6 +2489,29 @@ export default function PantryScreen() {
                 Position your receipt on a flat surface with good lighting. Make sure all text is clearly visible.
               </Text>
             </View>
+
+            {/* Process Receipt Button - ABOVE image when image exists */}
+            {selectedImage && (
+              <TouchableOpacity 
+                style={styles.processReceiptButtonTop}
+                onPress={() => {
+                  console.log('🔘 RECEIPT DEBUG - Process Receipt button pressed');
+                  console.log('🔘 RECEIPT DEBUG - Selected image:', selectedImage);
+                  console.log('🔘 RECEIPT DEBUG - Processing state:', receiptProcessing);
+                  processReceipt();
+                }}
+                disabled={receiptProcessing}
+              >
+                {receiptProcessing ? (
+                  <ActivityIndicator size="small" color={COLORS.white} />
+                ) : (
+                  <Ionicons name="scan" size={20} color={COLORS.white} />
+                )}
+                <Text style={styles.processReceiptButtonText}>
+                  {receiptProcessing ? 'Processing...' : 'Process Receipt'}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {/* Image Preview */}
             {selectedImage && (
@@ -1425,29 +2564,6 @@ export default function PantryScreen() {
                 <Text style={styles.receiptScanButtonSecondaryText}>Choose from Library</Text>
               </TouchableOpacity>
             </View>
-
-            {/* Processing Button */}
-            {selectedImage && (
-              <TouchableOpacity 
-                style={styles.processReceiptButton}
-                onPress={() => {
-                  console.log('🔘 RECEIPT DEBUG - Process Receipt button pressed');
-                  console.log('🔘 RECEIPT DEBUG - Selected image:', selectedImage);
-                  console.log('🔘 RECEIPT DEBUG - Processing state:', receiptProcessing);
-                  processReceipt();
-                }}
-                disabled={receiptProcessing}
-              >
-                {receiptProcessing ? (
-                  <ActivityIndicator size="small" color={COLORS.white} />
-                ) : (
-                  <Ionicons name="scan" size={20} color={COLORS.white} />
-                )}
-                <Text style={styles.processReceiptButtonText}>
-                  {receiptProcessing ? 'Processing...' : 'Process Receipt'}
-                </Text>
-              </TouchableOpacity>
-            )}
 
             {/* Error Message */}
             {imageError && (
@@ -1659,32 +2775,92 @@ const styles = StyleSheet.create({
   scrollContent: { 
     paddingBottom: 40 
   },
-  header: { 
-    fontSize: 36, 
-    fontWeight: 'bold', 
-    color: COLORS.textPrimary, 
-    marginTop: 32, 
-    marginBottom: 24, 
-    marginLeft: 24 
-  },
-  searchBar: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
-    borderRadius: 16,
-    marginHorizontal: 24,
-    marginBottom: 20,
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    paddingVertical: 20, // Increased top padding
+    paddingBottom: 36, // Increased spacing before search
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
     color: COLORS.textPrimary,
-    padding: 0,
   },
+  menuButton: {
+    padding: 8,
+  },
+      searchContainer: {
+      paddingHorizontal: 20,
+      marginTop: 8, // Add extra top margin
+      marginBottom: 24, // Increased space before action buttons
+    },
+    searchBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: COLORS.background,
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 14, // Increased padding for better touch target
+      borderWidth: 1,
+      borderColor: COLORS.border,
+    },
+      searchInput: {
+      flex: 1,
+      fontSize: 16,
+      color: COLORS.textPrimary,
+      padding: 0,
+    },
+    pantryActions: {
+      flexDirection: 'row',
+      gap: 12,
+      paddingHorizontal: 20,
+      marginBottom: 20,
+    },
+    groceryListBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: COLORS.white,
+      borderWidth: 2,
+      borderColor: '#DC3545',
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      gap: 6,
+    },
+    groceryListBtnText: {
+      color: '#DC3545',
+      fontWeight: '600',
+      fontSize: 14,
+    },
+    essentialsToggleBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      borderWidth: 2,
+      gap: 6,
+    },
+    essentialsToggleBtnEnabled: {
+      backgroundColor: '#FFC107',
+      borderColor: '#FFC107',
+    },
+    essentialsToggleBtnDisabled: {
+      backgroundColor: COLORS.white,
+      borderColor: '#6C757D',
+    },
+    essentialsToggleBtnText: {
+      fontWeight: '600',
+      fontSize: 14,
+    },
   statsContainer: {
     marginHorizontal: 24,
     marginBottom: 20,
@@ -1815,11 +2991,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.white,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E9ECEF',
-    padding: 16,
-    marginBottom: 8,
+    padding: 16, // Reduced padding for cleaner look
+    marginBottom: 12,
     ...SHADOWS.medium,
   },
   itemLeft: {
@@ -1827,53 +3003,56 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  itemIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    backgroundColor: '#F8F9FA',
-  },
-  itemIconText: {
-    fontSize: 20,
-  },
   itemInfo: {
     flex: 1,
   },
   itemName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: COLORS.textPrimary,
-    marginBottom: 2,
+    marginBottom: 4,
+    lineHeight: 24,
+  },
+  itemNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  essentialItem: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#FFD700',
+    backgroundColor: '#FFFBF0',
+  },
+  essentialBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    gap: 2,
+  },
+  essentialBadgeIcon: {
+    fontSize: 10,
+  },
+  essentialBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#8B4513',
   },
   itemQty: {
-    fontSize: 14,
+    fontSize: 15,
     color: COLORS.textSecondary,
-    fontWeight: '500',
+    fontWeight: '600',
+    backgroundColor: '#F8F9FA',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   itemRight: {
     alignItems: 'flex-end',
-  },
-  urgentWarning: {
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  expBadge: {
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 4,
-  },
-  expBadgeText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  expDateText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
+    // Removed expiration-related styles for cleaner UI
   },
   fab: {
     position: 'absolute',
@@ -1919,12 +3098,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 12,
   },
-  emptyStateButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
+      emptyStateButtonText: {
+      color: COLORS.white,
+      fontSize: 16,
+      fontWeight: '600',
+      marginLeft: 8,
+    },
+    essentialsTip: {
+      marginTop: 20,
+      paddingHorizontal: 20,
+    },
+    essentialsTipText: {
+      fontSize: 14,
+      color: COLORS.textSecondary,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    essentialsTipBold: {
+      fontWeight: '600',
+      color: COLORS.textPrimary,
+    },
   // Enhanced OCR Results Modal styles
   ocrResultsContainer: {
     flex: 1,
@@ -1945,15 +3138,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ocrResultsTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   ocrResultsSubtitle: {
-    fontSize: 14,
+    fontSize: 15,
     color: COLORS.textSecondary,
     textAlign: 'center',
+    lineHeight: 20,
   },
   ocrResultsSpacer: {
     width: 40,
@@ -1963,35 +3157,37 @@ const styles = StyleSheet.create({
   },
   ocrSuccessSummary: {
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
     backgroundColor: '#F0FDF4',
     margin: 16,
-    borderRadius: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
   },
   ocrSuccessIcon: {
     marginBottom: 12,
   },
   ocrSuccessTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: COLORS.textPrimary,
-    marginBottom: 6,
+    marginBottom: 8,
     textAlign: 'center',
   },
   ocrSuccessText: {
-    fontSize: 14,
+    fontSize: 15,
     color: COLORS.textSecondary,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
   },
   addManualItemButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
     marginHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 20,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.primary,
@@ -2005,20 +3201,21 @@ const styles = StyleSheet.create({
   },
   ocrItemsContainer: {
     padding: 16,
+    paddingBottom: 20,
   },
   ocrItemCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 16,
-    marginBottom: 12,
+    padding: 20,
+    marginBottom: 16,
     ...SHADOWS.medium,
   },
   ocrItemHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   ocrItemCheckbox: {
     marginRight: 12,
@@ -2033,18 +3230,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   ocrItemName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: COLORS.textPrimary,
     flex: 1,
+    lineHeight: 24,
   },
   ocrItemNameInput: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: COLORS.textPrimary,
     flex: 1,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: COLORS.primary,
     borderRadius: 8,
@@ -2057,50 +3255,54 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
     backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   ocrItemCategoryText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
     color: COLORS.textSecondary,
-    marginRight: 4,
+    marginRight: 6,
   },
   ocrItemDeleteButton: {
-    padding: 8,
-    marginLeft: 8,
+    padding: 10,
+    marginLeft: 12,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
   },
   ocrItemDetails: {
     marginLeft: 36,
+    marginTop: 8,
   },
   ocrItemDetailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 12,
   },
   ocrItemDetailLabel: {
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: '600',
     color: COLORS.textSecondary,
-    width: 80,
+    width: 90,
   },
   ocrItemQuantityInput: {
-    fontSize: 14,
+    fontSize: 15,
+    fontWeight: '600',
     color: COLORS.textPrimary,
-    paddingVertical: 2,
-    paddingHorizontal: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 6,
+    borderRadius: 8,
     backgroundColor: '#F8FAFC',
-    minWidth: 60,
+    minWidth: 80,
+    textAlign: 'center',
   },
-  ocrItemConfidence: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    fontStyle: 'italic',
-  },
+  // Confidence display removed for cleaner UI
   ocrNoItemsContainer: {
     alignItems: 'center',
     padding: 40,
@@ -2121,35 +3323,38 @@ const styles = StyleSheet.create({
   },
   ocrResultsFooter: {
     flexDirection: 'row',
-    padding: 16,
+    padding: 20,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    gap: 12,
+    gap: 16,
+    backgroundColor: COLORS.white,
   },
   ocrRetakeButton: {
-    flex: 1,
+    flex: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.white,
+    minWidth: 120,
   },
   ocrRetakeButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.textSecondary,
-    marginLeft: 8,
+    marginLeft: 6,
   },
   ocrAddItemsButton: {
-    flex: 2,
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderRadius: 12,
   },
   ocrAddItemsButtonDisabled: {
@@ -2157,7 +3362,7 @@ const styles = StyleSheet.create({
   },
   ocrAddItemsButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.white,
     marginLeft: 8,
   },
@@ -2356,6 +3561,23 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 12,
     margin: 16,
+  },
+  processReceiptButtonTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10B981',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    marginTop: 8,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   processReceiptButtonText: {
     color: COLORS.white,
@@ -2755,5 +3977,192 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     minHeight: 400,
+  },
+  // Success Message styles
+  successBanner: {
+    backgroundColor: '#10B981',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  successContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  successText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: COLORS.white,
+    marginLeft: 8,
+    flex: 1,
+  },
+  closeBanner: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  newlyAddedItem: {
+    borderWidth: 2,
+    borderColor: '#10B981',
+    backgroundColor: '#F0FDF4',
+    shadowColor: '#10B981',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  
+  // Swipe-to-delete styles
+  swipeableContainer: {
+    position: 'relative',
+    marginBottom: 8,
+  },
+  deleteButton: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 80,
+    backgroundColor: '#DC2626',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    zIndex: 1,
+  },
+  deleteButtonTouchable: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+  deleteButtonText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  itemTouchable: {
+    flex: 1,
+  },
+  undoToast: {
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: '#374151',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    zIndex: 1000,
+    ...SHADOWS.large,
+  },
+  undoToastContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  undoToastText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '500',
+    flex: 1,
+    marginLeft: 8,
+  },
+  undoButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  undoButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // AI Insights Styles
+  aiInsightsSection: {
+    marginHorizontal: 20,
+    marginBottom: 24,
+  },
+  aiInsightsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  aiInsightsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginLeft: 8,
+  },
+  aiInsightsScroll: {
+    paddingRight: 20,
+  },
+  insightCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 16,
+    marginRight: 12,
+    minWidth: 200,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.medium,
+  },
+  insightopportunity: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#10B981',
+  },
+  insightwarning: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+  },
+  insightsuggestion: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+  },
+  insightinfo: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#6B7280',
+  },
+  insightIcon: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  insightText: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    lineHeight: 20,
+  },
+  quickStatsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  statIngredient: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginTop: 4,
   },
 }); 

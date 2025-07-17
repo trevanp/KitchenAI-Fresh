@@ -1,6 +1,6 @@
 // Quiz Service - Handles intelligent branching logic and pantry analysis
 
-// Comprehensive quiz data with branching logic
+// Comprehensive quiz data with checkbox-based multi-selection
 export const QUIZ_DATA = {
   quick: {
     title: 'Quick Pantry Quiz',
@@ -11,280 +11,180 @@ export const QUIZ_DATA = {
       {
         id: 'rice',
         category: 'grains',
-        question: 'Do you have rice at home?',
-        type: 'existence',
+        question: 'What types of rice do you have?',
+        type: 'multiSelect',
         icon: '🌾',
-        followUp: {
-          quantity: 'How much rice do you have?',
-          quantityOptions: [
-            'Almost empty',
-            'Less than 1 cup',
-            '1-3 cups',
-            'More than 3 cups',
-            'Large bag/container'
-          ],
-          variety: 'What type of rice?',
-          varietyOptions: [
-            'White rice',
-            'Brown rice',
-            'Jasmine rice',
-            'Basmati rice',
-            'Wild rice',
-            'Other'
-          ],
-          frequency: 'How often do you cook with rice?',
-          frequencyOptions: [
-            'Never',
-            'Rarely',
-            'Sometimes',
-            'Often',
-            'Daily'
-          ]
-        }
+        options: [
+          'White rice',
+          'Brown rice',
+          'Jasmine rice',
+          'Basmati rice',
+          'Arborio rice',
+          'Wild rice',
+          'Other'
+        ],
+        allowOther: true,
+        otherPlaceholder: 'Enter other rice type'
       },
       {
         id: 'pasta',
         category: 'grains',
-        question: 'Do you have pasta at home?',
-        type: 'existence',
+        question: 'What types of pasta do you have?',
+        type: 'multiSelect',
         icon: '🍝',
-        followUp: {
-          quantity: 'How much pasta do you have?',
-          quantityOptions: [
-            'Almost empty',
-            'Less than 1 pound',
-            '1-2 pounds',
-            'More than 2 pounds',
-            'Large stock'
-          ],
-          variety: 'What types of pasta?',
-          varietyOptions: [
-            'Spaghetti',
-            'Penne',
-            'Fusilli',
-            'Linguine',
-            'Macaroni',
-            'Other'
-          ],
-          frequency: 'How often do you cook with pasta?',
-          frequencyOptions: [
-            'Never',
-            'Rarely',
-            'Sometimes',
-            'Often',
-            'Daily'
-          ]
-        }
+        options: [
+          'Spaghetti',
+          'Penne',
+          'Fettuccine',
+          'Macaroni',
+          'Rigatoni',
+          'Angel hair',
+          'Other'
+        ],
+        allowOther: true,
+        otherPlaceholder: 'Enter other pasta type'
       },
       {
         id: 'flour',
         category: 'baking',
-        question: 'Do you have flour at home?',
-        type: 'existence',
+        question: 'What types of flour do you have?',
+        type: 'multiSelect',
         icon: '🌾',
-        followUp: {
-          quantity: 'How much flour do you have?',
-          quantityOptions: [
-            'Almost empty',
-            'Less than 2 cups',
-            '2-5 cups',
-            'More than 5 cups',
-            'Large bag'
-          ],
-          variety: 'What type of flour?',
-          varietyOptions: [
-            'All-purpose flour',
-            'Whole wheat flour',
-            'Bread flour',
-            'Cake flour',
-            'Almond flour',
-            'Other'
-          ],
-          frequency: 'How often do you bake?',
-          frequencyOptions: [
-            'Never',
-            'Rarely',
-            'Sometimes',
-            'Often',
-            'Daily'
-          ]
-        }
+        options: [
+          'All-purpose flour',
+          'Whole wheat flour',
+          'Bread flour',
+          'Self-rising flour',
+          'Almond flour',
+          'Other'
+        ],
+        allowOther: true,
+        otherPlaceholder: 'Enter other flour type'
       },
       // Proteins
       {
         id: 'beans',
         category: 'proteins',
-        question: 'Do you have dried beans or lentils?',
-        type: 'existence',
+        question: 'What types of beans and lentils do you have?',
+        type: 'multiSelect',
         icon: '🫘',
-        followUp: {
-          quantity: 'How much do you have?',
-          quantityOptions: [
-            'Almost empty',
-            'Less than 1 cup',
-            '1-3 cups',
-            'More than 3 cups',
-            'Large stock'
-          ],
-          variety: 'What types?',
-          varietyOptions: [
-            'Black beans',
-            'Kidney beans',
-            'Chickpeas',
-            'Lentils',
-            'Pinto beans',
-            'Other'
-          ],
-          frequency: 'How often do you cook with beans?',
-          frequencyOptions: [
-            'Never',
-            'Rarely',
-            'Sometimes',
-            'Often',
-            'Daily'
-          ]
-        }
+        options: [
+          'Black beans',
+          'Kidney beans',
+          'Chickpeas',
+          'Pinto beans',
+          'Navy beans',
+          'Lentils (red)',
+          'Lentils (green)',
+          'Other'
+        ],
+        allowOther: true,
+        otherPlaceholder: 'Enter other bean/lentil type'
       },
       {
         id: 'nuts',
         category: 'proteins',
-        question: 'Do you have nuts or seeds?',
-        type: 'existence',
+        question: 'What types of nuts do you have?',
+        type: 'multiSelect',
         icon: '🥜',
-        followUp: {
-          quantity: 'How much do you have?',
-          quantityOptions: [
-            'Almost empty',
-            'Small amount',
-            'Moderate amount',
-            'Large amount',
-            'Bulk stock'
-          ],
-          variety: 'What types?',
-          varietyOptions: [
-            'Almonds',
-            'Walnuts',
-            'Cashews',
-            'Chia seeds',
-            'Flax seeds',
-            'Other'
-          ],
-          frequency: 'How often do you use nuts/seeds?',
-          frequencyOptions: [
-            'Never',
-            'Rarely',
-            'Sometimes',
-            'Often',
-            'Daily'
-          ]
-        }
+        options: [
+          'Almonds',
+          'Walnuts',
+          'Pecans',
+          'Cashews',
+          'Peanuts',
+          'Pine nuts',
+          'Other'
+        ],
+        allowOther: true,
+        otherPlaceholder: 'Enter other nut type'
       },
       // Pantry Essentials
       {
         id: 'oil',
         category: 'essentials',
-        question: 'Do you have cooking oil?',
-        type: 'existence',
+        question: 'What types of cooking oil do you have?',
+        type: 'multiSelect',
         icon: '🫒',
-        followUp: {
-          quantity: 'How much oil do you have?',
-          quantityOptions: [
-            'Almost empty',
-            'Less than 1 cup',
-            '1-2 cups',
-            'More than 2 cups',
-            'Large bottle'
-          ],
-          variety: 'What types of oil?',
-          varietyOptions: [
-            'Olive oil',
-            'Vegetable oil',
-            'Coconut oil',
-            'Sesame oil',
-            'Avocado oil',
-            'Other'
-          ],
-          frequency: 'How often do you cook with oil?',
-          frequencyOptions: [
-            'Never',
-            'Rarely',
-            'Sometimes',
-            'Often',
-            'Daily'
-          ]
-        }
+        options: [
+          'Olive oil',
+          'Vegetable oil',
+          'Canola oil',
+          'Coconut oil',
+          'Avocado oil',
+          'Sesame oil',
+          'Other'
+        ],
+        allowOther: true,
+        otherPlaceholder: 'Enter other oil type'
       },
+      // Spices - Comprehensive checklist
       {
-        id: 'spices_basic',
+        id: 'spices',
         category: 'essentials',
-        question: 'Do you have basic spices?',
-        type: 'existence',
+        question: 'Which spices do you have?',
+        type: 'multiSelect',
         icon: '🧂',
-        followUp: {
-          quantity: 'How many spices do you have?',
-          quantityOptions: [
-            '1-3 spices',
-            '4-6 spices',
-            '7-10 spices',
-            '11-15 spices',
-            'More than 15'
-          ],
-          variety: 'Which basic spices?',
-          varietyOptions: [
-            'Salt',
-            'Black pepper',
-            'Garlic powder',
-            'Onion powder',
-            'Paprika',
-            'Cumin',
-            'Oregano',
-            'Other'
-          ],
-          frequency: 'How often do you use spices?',
-          frequencyOptions: [
-            'Never',
-            'Rarely',
-            'Sometimes',
-            'Often',
-            'Daily'
-          ]
-        }
+        options: [
+          'Salt',
+          'Black pepper',
+          'Garlic powder',
+          'Onion powder',
+          'Paprika',
+          'Cumin',
+          'Chili powder',
+          'Oregano',
+          'Basil',
+          'Thyme',
+          'Rosemary',
+          'Cinnamon',
+          'Turmeric',
+          'Cayenne pepper',
+          'Italian seasoning',
+          'Bay leaves',
+          'Red pepper flakes',
+          'Ginger powder',
+          'Nutmeg',
+          'Curry powder',
+          'Other'
+        ],
+        allowOther: true,
+        otherPlaceholder: 'Enter other spice',
+        searchable: true
       },
-      // Condiments
+      // Condiments - Comprehensive checklist
       {
         id: 'condiments',
         category: 'condiments',
-        question: 'Do you have condiments?',
-        type: 'existence',
+        question: 'Which condiments do you have?',
+        type: 'multiSelect',
         icon: '🥫',
-        followUp: {
-          quantity: 'How many condiments?',
-          quantityOptions: [
-            '1-3 condiments',
-            '4-6 condiments',
-            '7-10 condiments',
-            '11-15 condiments',
-            'More than 15'
-          ],
-          variety: 'Which condiments?',
-          varietyOptions: [
-            'Ketchup',
-            'Mustard',
-            'Mayonnaise',
-            'Soy sauce',
-            'Hot sauce',
-            'Vinegar',
-            'Other'
-          ],
-          frequency: 'How often do you use condiments?',
-          frequencyOptions: [
-            'Never',
-            'Rarely',
-            'Sometimes',
-            'Often',
-            'Daily'
-          ]
-        }
+        options: [
+          'Soy sauce',
+          'Olive oil',
+          'Vinegar (white)',
+          'Vinegar (apple cider)',
+          'Balsamic vinegar',
+          'Ketchup',
+          'Mustard (yellow)',
+          'Mustard (Dijon)',
+          'Mayonnaise',
+          'Hot sauce',
+          'Worcestershire sauce',
+          'Honey',
+          'Maple syrup',
+          'Lemon juice',
+          'Lime juice',
+          'Tomato paste',
+          'Chicken broth',
+          'Vegetable broth',
+          'Coconut milk',
+          'Fish sauce',
+          'Other'
+        ],
+        allowOther: true,
+        otherPlaceholder: 'Enter other condiment',
+        searchable: true
       }
     ]
   },
@@ -308,26 +208,9 @@ export const analyzePantry = (answers, quizType) => {
   let dietaryPreferences = [];
   
   Object.entries(answers).forEach(([questionId, answer]) => {
-    if (answer.hasItem && !answer.skipped) {
-      score += 1;
-      
-      // Bonus for good quantities
-      if (answer.quantity && (
-        answer.quantity.includes('Large') || 
-        answer.quantity.includes('More than') ||
-        answer.quantity.includes('Bulk')
-      )) {
-        score += 0.5;
-      }
-      
-      // Bonus for frequent usage
-      if (answer.frequency && (
-        answer.frequency === 'Often' || 
-        answer.frequency === 'Daily'
-      )) {
-        score += 0.5;
-        cookingFrequency = 'high';
-      }
+    if (answer.selectedItems && answer.selectedItems.length > 0 && !answer.skipped) {
+      // Score based on number of items selected
+      score += Math.min(answer.selectedItems.length, 3); // Cap at 3 points per category
       
       // Track categories
       const question = QUIZ_DATA[quizType].questions.find(q => q.id === questionId);
@@ -335,27 +218,27 @@ export const analyzePantry = (answers, quizType) => {
         if (!categories[question.category]) {
           categories[question.category] = 0;
         }
-        categories[question.category]++;
+        categories[question.category] += answer.selectedItems.length;
       }
       
       // Detect dietary preferences
-      if (questionId === 'beans' && answer.hasItem) {
+      if (questionId === 'beans' && answer.selectedItems.length > 0) {
         dietaryPreferences.push('plant-based');
       }
-      if (questionId === 'nuts' && answer.hasItem) {
+      if (questionId === 'nuts' && answer.selectedItems.length > 0) {
         dietaryPreferences.push('healthy-fats');
       }
     }
   });
 
-  const finalScore = Math.min(Math.round((score / totalQuestions) * 100), 100);
+  const finalScore = Math.min(Math.round((score / (totalQuestions * 3)) * 100), 100);
   
   return {
     score: finalScore,
     categories,
     cookingFrequency,
     dietaryPreferences: [...new Set(dietaryPreferences)],
-    totalItems: Object.values(answers).filter(a => a.hasItem && !a.skipped).length
+    totalItems: Object.values(answers).reduce((sum, a) => sum + (a.selectedItems?.length || 0), 0)
   };
 };
 
@@ -367,7 +250,7 @@ export const generateRecommendations = (answers, analysis) => {
   const mediumPriorityItems = [];
   
   // Check for missing essentials
-  if (!answers.rice?.hasItem) {
+  if (!answers.rice?.selectedItems || answers.rice.selectedItems.length === 0) {
     criticalItems.push({
       category: 'Grains',
       item: 'Rice',
@@ -377,17 +260,17 @@ export const generateRecommendations = (answers, analysis) => {
     });
   }
   
-  if (!answers.pasta?.hasItem) {
+  if (!answers.pasta?.selectedItems || answers.pasta.selectedItems.length === 0) {
     criticalItems.push({
       category: 'Grains',
       item: 'Pasta',
       reason: 'Quick and versatile meal base',
       priority: 'critical',
-      alternatives: ['Spaghetti', 'Penne', 'Fusilli']
+      alternatives: ['Spaghetti', 'Penne', 'Fettuccine']
     });
   }
   
-  if (!answers.oil?.hasItem) {
+  if (!answers.oil?.selectedItems || answers.oil.selectedItems.length === 0) {
     criticalItems.push({
       category: 'Essentials',
       item: 'Cooking Oil',
@@ -397,7 +280,7 @@ export const generateRecommendations = (answers, analysis) => {
     });
   }
   
-  if (!answers.spices_basic?.hasItem) {
+  if (!answers.spices?.selectedItems || answers.spices.selectedItems.length < 3) {
     highPriorityItems.push({
       category: 'Essentials',
       item: 'Basic Spices',
@@ -407,7 +290,7 @@ export const generateRecommendations = (answers, analysis) => {
     });
   }
   
-  if (!answers.beans?.hasItem) {
+  if (!answers.beans?.selectedItems || answers.beans.selectedItems.length === 0) {
     mediumPriorityItems.push({
       category: 'Proteins',
       item: 'Dried Beans/Lentils',
@@ -417,7 +300,7 @@ export const generateRecommendations = (answers, analysis) => {
     });
   }
   
-  if (!answers.condiments?.hasItem) {
+  if (!answers.condiments?.selectedItems || answers.condiments.selectedItems.length < 3) {
     mediumPriorityItems.push({
       category: 'Condiments',
       item: 'Basic Condiments',
@@ -427,7 +310,7 @@ export const generateRecommendations = (answers, analysis) => {
     });
   }
   
-  if (!answers.flour?.hasItem && analysis.cookingFrequency === 'high') {
+  if (!answers.flour?.selectedItems || answers.flour.selectedItems.length === 0) {
     highPriorityItems.push({
       category: 'Baking',
       item: 'Flour',
@@ -437,13 +320,13 @@ export const generateRecommendations = (answers, analysis) => {
     });
   }
   
-  if (!answers.nuts?.hasItem && analysis.dietaryPreferences.includes('healthy-fats')) {
+  if (!answers.nuts?.selectedItems || answers.nuts.selectedItems.length === 0) {
     mediumPriorityItems.push({
       category: 'Proteins',
       item: 'Nuts & Seeds',
       reason: 'Great source of healthy fats and protein',
       priority: 'medium',
-      alternatives: ['Almonds', 'Walnuts', 'Chia seeds']
+      alternatives: ['Almonds', 'Walnuts', 'Pecans']
     });
   }
 
@@ -455,7 +338,7 @@ export const generateRecipeSuggestions = (answers, analysis) => {
   const suggestions = [];
   
   // Rice-based recipes
-  if (answers.rice?.hasItem) {
+  if (answers.rice?.selectedItems && answers.rice.selectedItems.length > 0) {
     suggestions.push({
       title: 'Simple Fried Rice',
       difficulty: 'Easy',
@@ -466,13 +349,13 @@ export const generateRecipeSuggestions = (answers, analysis) => {
       description: 'Use leftover rice for a quick, delicious meal'
     });
     
-    if (answers.oil?.hasItem) {
+    if (answers.oil?.selectedItems && answers.oil.selectedItems.length > 0) {
       suggestions.push({
         title: 'Garlic Rice',
         difficulty: 'Easy',
         time: '25 min',
         ingredients: ['Rice', 'Garlic', 'Oil', 'Butter'],
-        hasIngredients: answers.oil?.hasItem,
+        hasIngredients: answers.oil.selectedItems.length > 0,
         category: 'Side Dishes',
         description: 'Simple and flavorful rice side dish'
       });
@@ -480,24 +363,24 @@ export const generateRecipeSuggestions = (answers, analysis) => {
   }
   
   // Pasta-based recipes
-  if (answers.pasta?.hasItem) {
+  if (answers.pasta?.selectedItems && answers.pasta.selectedItems.length > 0) {
     suggestions.push({
       title: 'Quick Pasta with Garlic',
       difficulty: 'Easy',
       time: '15 min',
       ingredients: ['Pasta', 'Garlic', 'Olive Oil'],
-      hasIngredients: answers.oil?.hasItem,
+      hasIngredients: answers.oil?.selectedItems && answers.oil.selectedItems.length > 0,
       category: 'Quick Meals',
       description: 'Simple pasta with garlic and oil'
     });
     
-    if (answers.spices_basic?.hasItem) {
+    if (answers.spices?.selectedItems && answers.spices.selectedItems.length > 0) {
       suggestions.push({
         title: 'Pasta with Basic Spices',
         difficulty: 'Easy',
         time: '20 min',
         ingredients: ['Pasta', 'Spices', 'Oil'],
-        hasIngredients: answers.oil?.hasItem,
+        hasIngredients: answers.oil?.selectedItems && answers.oil.selectedItems.length > 0,
         category: 'Quick Meals',
         description: 'Flavorful pasta using your basic spices'
       });
@@ -505,24 +388,24 @@ export const generateRecipeSuggestions = (answers, analysis) => {
   }
   
   // Bean-based recipes
-  if (answers.beans?.hasItem) {
+  if (answers.beans?.selectedItems && answers.beans.selectedItems.length > 0) {
     suggestions.push({
       title: 'Simple Bean Salad',
       difficulty: 'Easy',
       time: '10 min',
       ingredients: ['Beans', 'Vegetables', 'Oil'],
-      hasIngredients: answers.oil?.hasItem,
+      hasIngredients: answers.oil?.selectedItems && answers.oil.selectedItems.length > 0,
       category: 'Salads',
       description: 'Quick and nutritious bean salad'
     });
     
-    if (answers.spices_basic?.hasItem) {
+    if (answers.spices?.selectedItems && answers.spices.selectedItems.length > 0) {
       suggestions.push({
         title: 'Spiced Beans',
         difficulty: 'Easy',
         time: '30 min',
         ingredients: ['Beans', 'Spices', 'Oil'],
-        hasIngredients: answers.oil?.hasItem,
+        hasIngredients: answers.oil?.selectedItems && answers.oil.selectedItems.length > 0,
         category: 'Side Dishes',
         description: 'Flavorful beans with your spices'
       });
@@ -530,7 +413,7 @@ export const generateRecipeSuggestions = (answers, analysis) => {
   }
   
   // Baking recipes
-  if (answers.flour?.hasItem) {
+  if (answers.flour?.selectedItems && answers.flour.selectedItems.length > 0) {
     suggestions.push({
       title: 'Basic Pancakes',
       difficulty: 'Easy',
@@ -541,7 +424,7 @@ export const generateRecipeSuggestions = (answers, analysis) => {
       description: 'Classic pancakes for breakfast'
     });
     
-    if (answers.spices_basic?.hasItem) {
+    if (answers.spices?.selectedItems && answers.spices.selectedItems.length > 0) {
       suggestions.push({
         title: 'Spiced Muffins',
         difficulty: 'Medium',
@@ -555,7 +438,7 @@ export const generateRecipeSuggestions = (answers, analysis) => {
   }
   
   // Nut-based recipes
-  if (answers.nuts?.hasItem) {
+  if (answers.nuts?.selectedItems && answers.nuts.selectedItems.length > 0) {
     suggestions.push({
       title: 'Nut Trail Mix',
       difficulty: 'Easy',
@@ -608,53 +491,34 @@ export const convertAnswersToPantryItems = (answers) => {
   const pantryItems = [];
   
   Object.entries(answers).forEach(([questionId, answer]) => {
-    if (answer.hasItem && !answer.skipped) {
-      const item = {
-        name: getItemName(questionId, answer),
-        category: getItemCategory(questionId),
-        quantity: answer.quantity || '1',
-        notes: `Added from quiz - ${answer.frequency || 'Unknown'} usage`,
-        daysUntilExpiration: null
-      };
-      
-      pantryItems.push(item);
+    if (answer.selectedItems && answer.selectedItems.length > 0 && !answer.skipped) {
+      answer.selectedItems.forEach(item => {
+        const pantryItem = {
+          name: item,
+          category: getItemCategory(questionId),
+          quantity: '1',
+          notes: `Added from quiz - ${questionId} category`,
+          daysUntilExpiration: null
+        };
+        
+        pantryItems.push(pantryItem);
+      });
     }
   });
   
   return pantryItems;
 };
 
-const getItemName = (questionId, answer) => {
-  const baseNames = {
-    rice: 'Rice',
-    pasta: 'Pasta',
-    flour: 'Flour',
-    beans: 'Dried Beans',
-    nuts: 'Nuts & Seeds',
-    oil: 'Cooking Oil',
-    spices_basic: 'Basic Spices',
-    condiments: 'Condiments'
-  };
-  
-  let name = baseNames[questionId] || 'Unknown Item';
-  
-  if (answer.variety) {
-    name = answer.variety;
-  }
-  
-  return name;
-};
-
 const getItemCategory = (questionId) => {
   const categories = {
-    rice: 'Grains & Starches',
-    pasta: 'Grains & Starches',
-    flour: 'Grains & Starches',
-    beans: 'Proteins',
-    nuts: 'Proteins',
-    oil: 'Pantry Staples',
-    spices_basic: 'Condiments & Seasonings',
-    condiments: 'Condiments & Seasonings'
+    rice: 'Grains & Breads',
+    pasta: 'Grains & Breads',
+    flour: 'Baking & Flours',
+    beans: 'Protein',
+    nuts: 'Protein',
+    oil: 'Oils, Vinegars & Fats',
+    spices: 'Spices & Seasonings',
+    condiments: 'Condiments & Sauces'
   };
   
   return categories[questionId] || 'Other';

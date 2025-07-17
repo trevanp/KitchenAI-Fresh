@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -14,152 +14,147 @@ import {
   analyzePantry, 
   generateRecommendations, 
   generateRecipeSuggestions, 
-  getScoreInfo 
+  getScoreInfo,
+  convertAnswersToPantryItems 
 } from '../services/quizService';
+import { usePantry } from '../PantryContext';
 
 export default function QuizResultsScreen({ navigation, route }) {
   const { answers, quizType } = route.params;
-  const [pantryScore, setPantryScore] = useState(0);
-  const [recommendations, setRecommendations] = useState([]);
-  const [recipeSuggestions, setRecipeSuggestions] = useState([]);
-  const [scoreInfo, setScoreInfo] = useState({});
+  const { addPantryItems } = usePantry();
+  
+  const analysis = analyzePantry(answers, quizType);
+  const recommendations = generateRecommendations(answers, analysis);
+  const recipeSuggestions = generateRecipeSuggestions(answers, analysis);
+  const scoreInfo = getScoreInfo(analysis.score);
+  const pantryItems = convertAnswersToPantryItems(answers);
 
-  useEffect(() => {
-    analyzePantry();
-  }, []);
-
-  const analyzePantry = () => {
-    // Use the quiz service to analyze pantry
-    const analysis = analyzePantry(answers, quizType);
-    setPantryScore(analysis.score);
-    
-    // Get score information
-    const scoreData = getScoreInfo(analysis.score);
-    setScoreInfo(scoreData);
-
-    // Generate recommendations
-    const recs = generateRecommendations(answers, analysis);
-    setRecommendations(recs);
-    
-    // Generate recipe suggestions
-    const suggestions = generateRecipeSuggestions(answers, analysis);
-    setRecipeSuggestions(suggestions);
+  const handleAddToPantry = () => {
+    // Navigate back to confirmation screen to add items
+    navigation.navigate('QuizConfirmation', { answers, quizType });
   };
 
-
-
-
-
-  const addToPantry = (item) => {
-    Alert.alert(
-      'Add to Pantry',
-      `Would you like to add ${item} to your pantry?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Add', 
-          onPress: () => {
-            // Here you would integrate with your pantry system
-            Alert.alert('Success', `${item} has been added to your pantry!`);
-          }
-        }
-      ]
-    );
+  const getCategoryIcon = (category) => {
+    const icons = {
+      'Produce': '🥬',
+      'Protein': '🥩',
+      'Dairy': '🥛',
+      'Grains & Breads': '🍞',
+      'Canned & Jarred Goods': '🥫',
+      'Baking & Flours': '🧁',
+      'Spices & Seasonings': '🧂',
+      'Oils, Vinegars & Fats': '🫒',
+      'Condiments & Sauces': '🍯',
+      'Frozen': '🧊',
+      'Snacks & Treats': '🍿',
+      'Drinks & Beverages': '🥤',
+      'Grains': '🌾',
+      'Proteins': '🥜',
+      'Essentials': '🧂',
+      'Condiments': '🥫',
+      'Baking': '🍞',
+      'Pantry Staples': '📦'
+    };
+    return icons[category] || '📦';
   };
 
-  const startCooking = (recipe) => {
-    Alert.alert(
-      'Start Cooking',
-      `Would you like to view the recipe for ${recipe.title}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'View Recipe', 
-          onPress: () => {
-            // Navigate to recipe detail or search
-            navigation.navigate('Explore');
-          }
-        }
-      ]
-    );
+  const getPriorityColor = (priority) => {
+    const colors = {
+      critical: '#EF4444',
+      high: '#F59E0B',
+      medium: '#10B981'
+    };
+    return colors[priority] || COLORS.textSecondary;
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Pantry Analysis</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Quiz Results</Text>
+        <View style={styles.headerSpacer} />
+      </View>
 
-        {/* Score Card */}
-        <View style={styles.scoreCard}>
-          <View style={styles.scoreHeader}>
-            <Ionicons name="trophy" size={32} color={scoreInfo.color || COLORS.primary} />
-            <Text style={styles.scoreTitle}>Your Pantry Score</Text>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Score Section */}
+        <View style={styles.scoreSection}>
+          <View style={styles.scoreCircle}>
+            <Text style={styles.scoreNumber}>{analysis.score}</Text>
+            <Text style={styles.scoreLabel}>Pantry Score</Text>
           </View>
-          <Text style={[styles.scoreNumber, { color: scoreInfo.color || COLORS.primary }]}>
-            {pantryScore}/100
-          </Text>
-          <Text style={styles.scoreMessage}>{scoreInfo.message || 'Analyzing your pantry...'}</Text>
-          {scoreInfo.description && (
-            <Text style={styles.scoreDescription}>{scoreInfo.description}</Text>
-          )}
+          <Text style={styles.scoreMessage}>{scoreInfo.message}</Text>
+          <Text style={styles.scoreDescription}>{scoreInfo.description}</Text>
         </View>
 
-        {/* Recommendations */}
-        <View style={styles.section}>
+        {/* Stats Section */}
+        <View style={styles.statsSection}>
+          <Text style={styles.sectionTitle}>Your Pantry Stats</Text>
+          <View style={styles.statsGrid}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{analysis.totalItems}</Text>
+              <Text style={styles.statLabel}>Total Items</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{Object.keys(analysis.categories).length}</Text>
+              <Text style={styles.statLabel}>Categories</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{recommendations.length}</Text>
+              <Text style={styles.statLabel}>Suggestions</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Category Breakdown */}
+        <View style={styles.categorySection}>
+          <Text style={styles.sectionTitle}>Category Breakdown</Text>
+          {Object.entries(analysis.categories).map(([category, count]) => (
+            <View key={category} style={styles.categoryItem}>
+              <View style={styles.categoryHeader}>
+                <Text style={styles.categoryIcon}>{getCategoryIcon(category)}</Text>
+                <Text style={styles.categoryName}>{category}</Text>
+                <Text style={styles.categoryCount}>{count} items</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* Recommendations Section */}
+        <View style={styles.recommendationsSection}>
           <Text style={styles.sectionTitle}>Recommended Additions</Text>
-          <Text style={styles.sectionSubtitle}>
-            These items will help you cook more recipes
-          </Text>
-          
           {recommendations.map((rec, index) => (
-            <View key={index} style={styles.recommendationCard}>
+            <View key={index} style={styles.recommendationItem}>
               <View style={styles.recommendationHeader}>
-                <View style={styles.recommendationInfo}>
-                  <Text style={styles.recommendationItem}>{rec.item}</Text>
-                  <Text style={styles.recommendationCategory}>{rec.category}</Text>
-                </View>
-                <View style={[
-                  styles.priorityBadge, 
-                  { backgroundColor: rec.priority === 'critical' ? '#EF4444' : 
-                                   rec.priority === 'high' ? '#F59E0B' : '#10B981' }
-                ]}>
-                  <Text style={styles.priorityText}>
-                    {rec.priority === 'critical' ? 'Critical' : 
-                     rec.priority === 'high' ? 'High' : 'Medium'}
-                  </Text>
-                </View>
+                <View style={[styles.priorityDot, { backgroundColor: getPriorityColor(rec.priority) }]} />
+                <Text style={styles.recommendationTitle}>{rec.item}</Text>
+                <Text style={[styles.priorityText, { color: getPriorityColor(rec.priority) }]}>
+                  {rec.priority.toUpperCase()}
+                </Text>
               </View>
               <Text style={styles.recommendationReason}>{rec.reason}</Text>
-              <TouchableOpacity 
-                style={styles.addButton}
-                onPress={() => addToPantry(rec.item)}
-              >
-                <Ionicons name="add" size={16} color={COLORS.white} />
-                <Text style={styles.addButtonText}>Add to Pantry</Text>
-              </TouchableOpacity>
+              <View style={styles.alternativesContainer}>
+                <Text style={styles.alternativesLabel}>Suggestions:</Text>
+                <View style={styles.alternativesList}>
+                  {rec.alternatives.map((alt, altIndex) => (
+                    <Text key={altIndex} style={styles.alternativeItem}>• {alt}</Text>
+                  ))}
+                </View>
+              </View>
             </View>
           ))}
         </View>
 
         {/* Recipe Suggestions */}
-        <View style={styles.section}>
+        <View style={styles.recipesSection}>
           <Text style={styles.sectionTitle}>Recipe Suggestions</Text>
-          <Text style={styles.sectionSubtitle}>
-            Based on what you have in your pantry
-          </Text>
-          
           {recipeSuggestions.map((recipe, index) => (
-            <View key={index} style={styles.recipeCard}>
+            <View key={index} style={styles.recipeItem}>
               <View style={styles.recipeHeader}>
                 <Text style={styles.recipeTitle}>{recipe.title}</Text>
                 <View style={styles.recipeMeta}>
@@ -167,54 +162,33 @@ export default function QuizResultsScreen({ navigation, route }) {
                   <Text style={styles.recipeTime}>{recipe.time}</Text>
                 </View>
               </View>
+              <Text style={styles.recipeDescription}>{recipe.description}</Text>
               <View style={styles.recipeIngredients}>
                 <Text style={styles.ingredientsLabel}>Ingredients:</Text>
-                <Text style={styles.ingredientsList}>
-                  {recipe.ingredients.join(', ')}
-                </Text>
-              </View>
-              <View style={styles.recipeActions}>
-                <View style={styles.ingredientsStatus}>
-                  <Ionicons 
-                    name={recipe.hasIngredients ? "checkmark-circle" : "alert-circle"} 
-                    size={20} 
-                    color={recipe.hasIngredients ? "#10B981" : "#F59E0B"} 
-                  />
-                  <Text style={[
-                    styles.ingredientsStatusText,
-                    { color: recipe.hasIngredients ? "#10B981" : "#F59E0B" }
-                  ]}>
-                    {recipe.hasIngredients ? "You have the ingredients!" : "Missing some ingredients"}
-                  </Text>
-                </View>
-                <TouchableOpacity 
-                  style={styles.cookButton}
-                  onPress={() => startCooking(recipe)}
-                >
-                  <Ionicons name="restaurant" size={16} color={COLORS.white} />
-                  <Text style={styles.cookButtonText}>Start Cooking</Text>
-                </TouchableOpacity>
+                <Text style={styles.ingredientsList}>{recipe.ingredients.join(', ')}</Text>
               </View>
             </View>
           ))}
         </View>
 
         {/* Action Buttons */}
-        <View style={styles.actionButtons}>
+        <View style={styles.actionSection}>
           <TouchableOpacity 
             style={styles.primaryButton}
-            onPress={() => navigation.navigate('Explore')}
+            onPress={handleAddToPantry}
           >
-            <Ionicons name="search" size={20} color={COLORS.white} />
-            <Text style={styles.primaryButtonText}>Explore Recipes</Text>
+            <Ionicons name="list" size={20} color={COLORS.white} />
+            <Text style={styles.primaryButtonText}>
+              Review & Add Items
+            </Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
             style={styles.secondaryButton}
-            onPress={() => navigation.navigate('Pantry')}
+            onPress={() => navigation.navigate('Explore', { screen: 'ExploreMain' })}
           >
-            <Ionicons name="list" size={20} color={COLORS.primary} />
-            <Text style={styles.secondaryButtonText}>View My Pantry</Text>
+            <Ionicons name="restaurant" size={20} color={COLORS.primary} />
+            <Text style={styles.secondaryButtonText}>Find Recipes</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -247,139 +221,190 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 40,
   },
-  scoreCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 24,
-    margin: 20,
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  scoreSection: {
     alignItems: 'center',
+    paddingVertical: 32,
+  },
+  scoreCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
     ...SHADOWS.medium,
   },
-  scoreHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  scoreTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginLeft: 12,
-  },
   scoreNumber: {
-    fontSize: 48,
+    fontSize: 32,
     fontWeight: 'bold',
-    marginBottom: 8,
+    color: COLORS.white,
+  },
+  scoreLabel: {
+    fontSize: 12,
+    color: COLORS.white,
+    opacity: 0.9,
   },
   scoreMessage: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  scoreDescription: {
     fontSize: 16,
     color: COLORS.textSecondary,
     textAlign: 'center',
   },
-  scoreDescription: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-  section: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
+  statsSection: {
+    marginBottom: 32,
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: COLORS.textPrimary,
-    marginBottom: 4,
-  },
-  sectionSubtitle: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
     marginBottom: 16,
   },
-  recommendationCard: {
-    backgroundColor: COLORS.white,
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
     borderRadius: 12,
-    padding: 16,
+    marginHorizontal: 4,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  categorySection: {
+    marginBottom: 32,
+  },
+  categoryItem: {
+    backgroundColor: COLORS.background,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  categoryIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  categoryName: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  categoryCount: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  recommendationsSection: {
+    marginBottom: 32,
+  },
+  recommendationItem: {
+    backgroundColor: COLORS.background,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
   },
   recommendationHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  recommendationInfo: {
-    flex: 1,
+  priorityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
   },
-  recommendationItem: {
+  recommendationTitle: {
+    flex: 1,
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.textPrimary,
-  },
-  recommendationCategory: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  priorityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
   },
   priorityText: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.white,
   },
   recommendationReason: {
     fontSize: 14,
     color: COLORS.textSecondary,
     marginBottom: 12,
   },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
+  alternativesContainer: {
+    marginTop: 8,
   },
-  addButtonText: {
+  alternativesLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.white,
-    marginLeft: 4,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+    marginBottom: 4,
   },
-  recipeCard: {
-    backgroundColor: COLORS.white,
+  alternativesList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  alternativeItem: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginRight: 16,
+  },
+  recipesSection: {
+    marginBottom: 32,
+  },
+  recipeItem: {
+    backgroundColor: COLORS.background,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     borderRadius: 12,
-    padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
   },
   recipeHeader: {
-    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   recipeTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.textPrimary,
-    marginBottom: 4,
+    flex: 1,
   },
   recipeMeta: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   recipeDifficulty: {
     fontSize: 12,
-    color: COLORS.textSecondary,
-    backgroundColor: COLORS.background,
+    color: COLORS.primary,
+    backgroundColor: COLORS.primary + '20',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
@@ -387,13 +412,14 @@ const styles = StyleSheet.create({
   recipeTime: {
     fontSize: 12,
     color: COLORS.textSecondary,
-    backgroundColor: COLORS.background,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
+  },
+  recipeDescription: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginBottom: 8,
   },
   recipeIngredients: {
-    marginBottom: 12,
+    marginTop: 8,
   },
   ingredientsLabel: {
     fontSize: 14,
@@ -405,38 +431,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
   },
-  recipeActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  ingredientsStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  ingredientsStatusText: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 4,
-  },
-  cookButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-  cookButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.white,
-    marginLeft: 4,
-  },
-  actionButtons: {
-    paddingHorizontal: 20,
-    paddingBottom: 32,
+  actionSection: {
+    paddingVertical: 24,
     gap: 12,
   },
   primaryButton: {
@@ -445,28 +441,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
     paddingVertical: 16,
+    paddingHorizontal: 24,
     borderRadius: 12,
+    gap: 8,
   },
   primaryButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.white,
-    marginLeft: 8,
   },
   secondaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.primary,
+    backgroundColor: COLORS.background,
     paddingVertical: 16,
+    paddingHorizontal: 24,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 8,
   },
   secondaryButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: COLORS.primary,
-    marginLeft: 8,
   },
 }); 
