@@ -13,10 +13,10 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { usePantry } from '../PantryContext';
+import { usePantry } from '../context/PantryContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { extractTextFromImage } from '../ocrService';
+import { extractTextFromImage } from '../services/ocrService';
 import {
   Header,
   SearchBar,

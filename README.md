@@ -1,210 +1,135 @@
-# KitchenAI - Smart Kitchen Assistant
+# 🍽️ KitchenAI Fresh - Streamlined MVP
 
-A React Native Expo app that helps you manage your kitchen inventory, discover recipes based on your pantry, and plan meals efficiently.
+A clean, modern React Native app for smart pantry management with AI-powered features.
 
-## Features
-
-- **Pantry Management**: Scan receipts, barcodes, or manually add items to your pantry
-- **Recipe Discovery**: Find recipes based on ingredients you have using Spoonacular API
-- **Smart OCR**: Extract grocery items from receipt photos using Google Vision API
-- **AI-Powered Insights**: Get intelligent suggestions about your pantry and meal opportunities
-- **Smart Shopping Lists**: Generate intelligent shopping lists based on your pantry and selected recipes
-- **Recipe Matching**: AI-powered analysis of which recipes you can make with your current ingredients
-- **Ingredient Substitutions**: Get smart substitution suggestions when you're missing ingredients
-- **Recipe Collection**: Save and organize your favorite recipes
-- **Meal Planning**: Plan your meals for the week (coming soon)
-- **User Profile**: Manage your preferences and settings (coming soon)
-
-## Tech Stack
-
-- **Frontend**: React Native with Expo
-- **Navigation**: React Navigation (Bottom Tabs)
-- **Icons**: Expo Vector Icons (Ionicons)
-- **Image Processing**: Expo Image Picker & Image Manipulator
-- **OCR**: Google Vision API
-- **Recipe API**: Spoonacular API
-- **AI Integration**: OpenAI GPT-3.5-turbo API
-- **Design System**: Custom components with consistent styling
-
-## Prerequisites
-
-Before you begin, ensure you have the following installed:
-
-- **Node.js** (v16 or higher) - [Download here](https://nodejs.org/)
-- **npm** or **yarn** package manager
-- **Expo CLI** - Install globally: `npm install -g @expo/cli`
-- **Expo Go** app on your mobile device - [iOS](https://apps.apple.com/app/expo-go/id982107779) | [Android](https://play.google.com/store/apps/details?id=host.exp.exponent)
-
-## Setup Instructions
-
-### 1. Clone the Repository
+## 🚀 Quick Start
 
 ```bash
-git clone https://github.com/your-username/KitchenAI-Fresh.git
-cd KitchenAI-Fresh
-```
-
-### 2. Install Dependencies
-
-```bash
+# Install dependencies
 npm install
-# or if using yarn:
-# yarn install
+
+# Start the development server
+npm start
+
+# Run on specific platforms
+npm run ios      # iOS simulator
+npm run android  # Android emulator
+npm run web      # Web browser
 ```
 
-### 3. Environment Setup
+## 📱 Features
+
+- **Smart Pantry Management**: Add, search, and organize pantry items
+- **Receipt OCR**: Scan grocery receipts to automatically add items
+- **Pantry Quiz**: Quick setup wizard to populate your pantry
+- **Clean Design**: Intuitive interface with modern design system
+
+## 📂 Project Structure
+
+```
+src/
+├── components/           # Reusable UI components
+│   ├── DesignSystem.js  # Design tokens & base components
+│   └── RecipeCard.js    # Recipe display component
+├── screens/             # Screen components
+│   ├── PantryScreen.js  # Main pantry management
+│   ├── CookbookScreen.js # Saved recipes
+│   └── PantryQuizScreen.js # Onboarding quiz
+├── context/             # React Context providers
+│   └── PantryContext.js # Global pantry state
+├── services/            # API services & utilities
+│   └── ocrService.js    # Google Vision OCR integration
+└── App.js              # Main app component
+
+assets/                  # Static images & icons
+docs/                   # Documentation
+├── setup/              # API configuration guides
+└── guides/             # Implementation guides
+```
+
+## 🛠️ Configuration
+
+### Required API Keys
+
+1. **Google Vision API** (for receipt OCR)
+   - See `docs/setup/GOOGLE_VISION_API_SETUP.md`
+
+2. **Expo Camera** (for photo capture)
+   - Automatically configured in Expo
+
+### Environment Setup
 
 Create a `.env` file in the root directory:
 
-```bash
-touch .env
-```
-
-Add your API keys to the `.env` file:
-
 ```env
-# Google Vision API Key (for receipt scanning)
-GOOGLE_VISION_API_KEY=your_google_vision_api_key_here
-
-# Spoonacular API Key (for recipe discovery)
-SPOONACULAR_API_KEY=your_spoonacular_api_key_here
-
-# OpenAI API Key (for AI-powered features)
-OPENAI_API_KEY=your_openai_api_key_here
+GOOGLE_VISION_API_KEY=your_api_key_here
 ```
 
-### 4. Get API Keys
+## 🎯 Core Technologies
 
-#### Google Vision API (Optional - for receipt scanning)
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing one
-3. Enable the Cloud Vision API
-4. Create credentials (API Key)
-5. Add the key to your `.env` file
+- **React Native** + **Expo** for cross-platform development
+- **React Navigation** for navigation
+- **React Context** for state management
+- **Google Vision API** for OCR functionality
+- **Expo Camera** for image capture
 
-#### Spoonacular API (Required - for recipe discovery)
-1. Go to [Spoonacular](https://spoonacular.com/food-api)
-2. Sign up for a free account
-3. Get your API key from the dashboard
-4. Add the key to your `.env` file
-
-#### OpenAI API (Optional - for AI-powered features)
-1. Go to [OpenAI Platform](https://platform.openai.com/)
-2. Sign up or log in to your account
-3. Navigate to "API Keys" in the left sidebar
-4. Click "Create new secret key"
-5. Copy your API key (it starts with `sk-`)
-6. Add the key to your `.env` file
-7. **Important**: Add your API key to `services/openaiService.js` as well
-
-### 5. Start the Development Server
-
-```bash
-npx expo start
-```
-
-### 6. Run on Your Device
-
-1. Open the **Expo Go** app on your phone
-2. Scan the QR code displayed in your terminal
-3. The app will load on your device
-
-## Project Structure
-
-```
-KitchenAI-Fresh/
-├── components/
-│   └── DesignSystem.js          # Shared design system components
-├── screens/
-│   ├── ExploreScreen.js         # Recipe discovery with AI insights
-│   ├── CookbookScreen.js        # Saved recipes
-│   ├── MealPlanScreen.js        # Meal planning (placeholder)
-│   ├── PantryScreen.js          # Inventory management with AI insights
-│   ├── GroceryListScreen.js     # Smart shopping lists with AI
-│   └── ProfileScreen.js         # User profile (placeholder)
-├── services/
-│   ├── openaiService.js         # OpenAI API integration
-│   ├── spoonacularService.js    # Recipe API integration
-│   ├── pantryEssentialsService.js # Pantry essentials management
-│   └── quizService.js           # Pantry quiz functionality
-├── App.js                       # Main app component with navigation
-├── ocrService.js               # Google Vision API integration
-├── .env                        # Environment variables (create this)
-├── .gitignore                  # Git ignore rules
-└── README.md                   # This file
-```
-
-## Available Scripts
-
-- `npx expo start` - Start the development server
-- `npx expo start --clear` - Clear cache and start server
-- `npx expo start --tunnel` - Start with tunnel for external access
-
-## Development Workflow
-
-### Making Changes
-1. Create a new branch: `git checkout -b feature/your-feature-name`
-2. Make your changes
-3. Test on your device
-4. Commit your changes: `git commit -m "Add your feature description"`
-5. Push to GitHub: `git push origin feature/your-feature-name`
-6. Create a Pull Request
+## 📖 Development
 
 ### Code Style
-- Use the design system components from `components/DesignSystem.js`
-- Follow the existing color scheme and typography
-- Keep components modular and reusable
-- Add comments for complex logic
+- Clean, readable component structure
+- Centralized design system
+- Consistent naming conventions
+- Modular architecture
 
-## Troubleshooting
+### Key Components
+- `DesignSystem.js`: Contains all design tokens (colors, typography, spacing)
+- `PantryContext.js`: Global state management for pantry items
+- `ocrService.js`: Handles receipt scanning and text extraction
+
+## 📋 Available Scripts
+
+```bash
+npm start          # Start Expo development server
+npm run android    # Run on Android emulator
+npm run ios        # Run on iOS simulator
+npm run web        # Run in web browser
+```
+
+## 🔧 Troubleshooting
 
 ### Common Issues
 
-**"Unable to resolve module" errors**
-```bash
-npx expo start --clear
-```
+1. **Metro bundler cache**: Run `expo start -c` to clear cache
+2. **Node modules**: Delete `node_modules` and run `npm install`
+3. **OCR not working**: Check your Google Vision API key in `.env`
 
-**Metro bundler issues**
-```bash
-rm -rf node_modules
-npm install
-npx expo start --clear
-```
+### Performance Tips
 
-**Expo Go connection issues**
-- Ensure your phone and computer are on the same WiFi network
-- Try using tunnel mode: `npx expo start --tunnel`
+- Use `react-native-reanimated` for smooth animations
+- Optimize images in the `assets/` folder
+- Implement proper list virtualization for large datasets
 
-**API key issues**
-- Verify your `.env` file is in the root directory
-- Check that API keys are correct and active
-- Restart the development server after adding new environment variables
+## 📚 Documentation
 
-### Getting Help
+- **Setup Guides**: `docs/setup/` - API configuration instructions
+- **Implementation Guides**: `docs/guides/` - Feature implementation details
 
-1. Check the [Expo documentation](https://docs.expo.dev/)
-2. Review [React Native documentation](https://reactnative.dev/)
-3. Search existing issues in the GitHub repository
-4. Create a new issue with detailed error information
+## 🎨 Design System
 
-## Contributing
+The app uses a consistent design system defined in `src/components/DesignSystem.js`:
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+- **Colors**: Primary (#DC2626), success, error, and neutral tones
+- **Typography**: Responsive text styles for all screen sizes
+- **Spacing**: Consistent spacing scale (xs, sm, md, lg, xl)
+- **Components**: Reusable UI components (Button, Card, Header, etc.)
 
-## License
+## 🤝 Contributing
 
-This project is licensed under the MIT License.
-
-## Team
-
-- **Trevan** - Project Lead & Development
-- **Cole** - Development & Testing
+1. Follow the existing file structure
+2. Use the design system for consistent styling
+3. Write clean, commented code
+4. Test on both iOS and Android
 
 ---
 
-**Happy coding! 🍳👨‍🍳** 
+Built with ❤️ using React Native and Expo 

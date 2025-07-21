@@ -4,7 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
-import { PantryProvider } from './PantryContext';
+import { PantryProvider } from './context/PantryContext';
 
 // Import only the screens we need for MVP
 import CookbookScreen from './screens/CookbookScreen';
