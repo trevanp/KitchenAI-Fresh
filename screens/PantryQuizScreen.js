@@ -1,232 +1,174 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
   SafeAreaView,
-  ActivityIndicator,
-  TextInput,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SHADOWS } from '../components/DesignSystem';
-import { QUIZ_DATA } from '../services/quizService';
 import { usePantry } from '../PantryContext';
+import {
+  Header,
+  Button,
+  Card,
+  COLORS,
+  TYPOGRAPHY,
+  SPACING,
+  BORDER_RADIUS,
+  SHADOWS,
+} from '../components/DesignSystem';
+
+// Simplified quiz questions focusing on common pantry items
+const QUIZ_QUESTIONS = [
+  {
+    id: 'proteins',
+    title: 'Proteins',
+    icon: '🥩',
+    items: [
+      { name: 'Chicken Breast', category: 'Meat & Seafood' },
+      { name: 'Ground Beef', category: 'Meat & Seafood' },
+      { name: 'Salmon', category: 'Meat & Seafood' },
+      { name: 'Eggs', category: 'Dairy' },
+      { name: 'Tofu', category: 'Meat & Seafood' },
+      { name: 'Beans', category: 'Pantry Staples' },
+    ]
+  },
+  {
+    id: 'produce',
+    title: 'Fresh Produce',
+    icon: '🥬',
+    items: [
+      { name: 'Onions', category: 'Produce' },
+      { name: 'Garlic', category: 'Produce' },
+      { name: 'Tomatoes', category: 'Produce' },
+      { name: 'Lettuce', category: 'Produce' },
+      { name: 'Carrots', category: 'Produce' },
+      { name: 'Bell Peppers', category: 'Produce' },
+    ]
+  },
+  {
+    id: 'dairy',
+    title: 'Dairy Products',
+    icon: '🥛',
+    items: [
+      { name: 'Milk', category: 'Dairy' },
+      { name: 'Cheese', category: 'Dairy' },
+      { name: 'Butter', category: 'Dairy' },
+      { name: 'Yogurt', category: 'Dairy' },
+      { name: 'Cream Cheese', category: 'Dairy' },
+    ]
+  },
+  {
+    id: 'pantry',
+    title: 'Pantry Staples',
+    icon: '🌾',
+    items: [
+      { name: 'Rice', category: 'Pantry Staples' },
+      { name: 'Pasta', category: 'Pantry Staples' },
+      { name: 'Bread', category: 'Pantry Staples' },
+      { name: 'Flour', category: 'Pantry Staples' },
+      { name: 'Salt', category: 'Pantry Staples' },
+      { name: 'Black Pepper', category: 'Pantry Staples' },
+      { name: 'Olive Oil', category: 'Pantry Staples' },
+      { name: 'Sugar', category: 'Pantry Staples' },
+    ]
+  }
+];
 
 export default function PantryQuizScreen({ navigation, route }) {
-  const { completeQuiz } = usePantry();
-  const { source, returnTo, isRetake } = route.params || {};
-  const [quizType, setQuizType] = useState('quick');
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState({});
+  const { addPantryItem, markQuizAsCompleted } = usePantry();
+  const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedItems, setSelectedItems] = useState([]);
-  const [otherInput, setOtherInput] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  
-  const quizData = QUIZ_DATA[quizType];
-  const currentQuestion = quizData.questions[currentQuestionIndex];
-  const progress = ((currentQuestionIndex + 1) / quizData.questions.length) * 100;
+  const [allSelectedItems, setAllSelectedItems] = useState([]);
 
-  // Filter options based on search query
-  const filteredOptions = currentQuestion.options.filter(option =>
-    option.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const isRetake = route?.params?.isRetake || false;
 
   const handleItemToggle = (item) => {
-    if (item === 'Other') {
-      // Handle "Other" selection
-      if (selectedItems.includes('Other')) {
-        setSelectedItems(prev => prev.filter(i => i !== 'Other'));
-        setOtherInput('');
+    setSelectedItems(prev => {
+      if (prev.find(i => i.name === item.name)) {
+        return prev.filter(i => i.name !== item.name);
       } else {
-        setSelectedItems(prev => [...prev, 'Other']);
+        return [...prev, item];
       }
-    } else {
-      // Handle regular item selection
-      if (selectedItems.includes(item)) {
-        setSelectedItems(prev => prev.filter(i => i !== item));
-      } else {
-        setSelectedItems(prev => [...prev, item]);
-      }
-    }
-  };
-
-  const handleSelectAll = () => {
-    const allItems = currentQuestion.options.filter(item => item !== 'Other');
-    setSelectedItems(allItems);
-  };
-
-  const handleClearAll = () => {
-    setSelectedItems([]);
-    setOtherInput('');
-  };
-
-  const handleNext = () => {
-    const questionId = currentQuestion.id;
-    let finalSelectedItems = [...selectedItems];
-    
-    // Handle "Other" input
-    if (selectedItems.includes('Other') && otherInput.trim()) {
-      finalSelectedItems = finalSelectedItems.filter(item => item !== 'Other');
-      finalSelectedItems.push(otherInput.trim());
-    }
-    
-    setAnswers(prev => ({
-      ...prev,
-      [questionId]: { 
-        selectedItems: finalSelectedItems,
-        skipped: finalSelectedItems.length === 0
-      }
-    }));
-    
-    if (currentQuestionIndex < quizData.questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
-      setSelectedItems([]);
-      setOtherInput('');
-      setSearchQuery('');
-    } else {
-      finishQuiz();
-    }
-  };
-
-  const handleSkip = () => {
-    const questionId = currentQuestion.id;
-    setAnswers(prev => ({
-      ...prev,
-      [questionId]: { selectedItems: [], skipped: true }
-    }));
-    
-    if (currentQuestionIndex < quizData.questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
-      setSelectedItems([]);
-      setOtherInput('');
-      setSearchQuery('');
-    } else {
-      finishQuiz();
-    }
-  };
-
-  const finishQuiz = async () => {
-    setLoading(true);
-    
-    // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setLoading(false);
-    
-    // Navigate to confirmation screen with route parameters
-    navigation.navigate('QuizConfirmation', { 
-      answers, 
-      quizType,
-      source,
-      returnTo,
-      isRetake
     });
   };
 
-  const renderCheckboxItem = (item) => {
-    const isSelected = selectedItems.includes(item);
-    const isOther = item === 'Other';
+  const handleNext = () => {
+    // Add current selections to all selected items
+    setAllSelectedItems(prev => [...prev, ...selectedItems]);
+    setSelectedItems([]);
+
+    if (currentQuestion < QUIZ_QUESTIONS.length - 1) {
+      setCurrentQuestion(prev => prev + 1);
+    } else {
+      completeQuiz();
+    }
+  };
+
+  const handleBack = () => {
+    if (currentQuestion > 0) {
+      setCurrentQuestion(prev => prev - 1);
+      setSelectedItems([]);
+    }
+  };
+
+  const completeQuiz = () => {
+    const finalItems = [...allSelectedItems, ...selectedItems];
     
-    return (
-      <TouchableOpacity
-        key={item}
-        style={[styles.checkboxItem, isSelected && styles.checkboxItemSelected]}
-        onPress={() => handleItemToggle(item)}
-      >
-        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-          {isSelected && (
-            <Ionicons name="checkmark" size={16} color={COLORS.white} />
-          )}
-        </View>
-        <Text style={[styles.checkboxText, isSelected && styles.checkboxTextSelected]}>
-          {item}
-        </Text>
-      </TouchableOpacity>
+    if (finalItems.length === 0) {
+      Alert.alert('No Items Selected', 'Please select at least one item to add to your pantry.');
+      return;
+    }
+
+    // Add items to pantry
+    finalItems.forEach(item => {
+      const pantryItem = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        name: item.name,
+        category: item.category,
+        quantity: '1',
+        addedAt: new Date().toISOString(),
+        notes: 'Added from pantry quiz',
+      };
+      addPantryItem(pantryItem);
+    });
+
+    // Mark quiz as completed
+    markQuizAsCompleted();
+
+    Alert.alert(
+      'Quiz Complete!',
+      `Added ${finalItems.length} items to your pantry.`,
+      [
+        {
+          text: 'View Pantry',
+          onPress: () => {
+            navigation.navigate('Pantry', {
+              showSuccessMessage: true,
+              message: `Added ${finalItems.length} items from quiz!`
+            });
+          }
+        }
+      ]
     );
   };
 
-  const renderQuestion = () => {
-    return (
-      <View style={styles.questionContainer}>
-        <Text style={styles.questionText}>{currentQuestion.question}</Text>
-        
-        {/* Search bar for large lists */}
-        {currentQuestion.searchable && (
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color={COLORS.textSecondary} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search spices..."
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholderTextColor={COLORS.textSecondary}
-            />
-          </View>
-        )}
-        
-        {/* Select All / Clear All buttons */}
-        <View style={styles.actionButtons}>
-          <TouchableOpacity style={styles.actionButton} onPress={handleSelectAll}>
-            <Text style={styles.actionButtonText}>Select All</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton} onPress={handleClearAll}>
-            <Text style={styles.actionButtonText}>Clear All</Text>
-          </TouchableOpacity>
-        </View>
-        
-        {/* Checkbox list */}
-        <ScrollView style={styles.checkboxList} showsVerticalScrollIndicator={false}>
-          {filteredOptions.map(renderCheckboxItem)}
-          
-          {/* Other input field */}
-          {selectedItems.includes('Other') && (
-            <View style={styles.otherInputContainer}>
-              <TextInput
-                style={styles.otherInput}
-                placeholder={currentQuestion.otherPlaceholder}
-                value={otherInput}
-                onChangeText={setOtherInput}
-                placeholderTextColor={COLORS.textSecondary}
-              />
-            </View>
-          )}
-        </ScrollView>
-        
-        {/* Selection count */}
-        <Text style={styles.selectionCount}>
-          {selectedItems.length} item{selectedItems.length !== 1 ? 's' : ''} selected
-        </Text>
-      </View>
-    );
-  };
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Analyzing your pantry...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const currentQuestionData = QUIZ_QUESTIONS[currentQuestion];
+  const progress = ((currentQuestion + 1) / QUIZ_QUESTIONS.length) * 100;
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{quizData.title}</Text>
-        <View style={styles.headerSpacer} />
+        <Text style={styles.headerTitle}>
+          {isRetake ? 'Retake Quiz' : 'Pantry Quiz'}
+        </Text>
+        <View style={styles.placeholder} />
       </View>
 
       {/* Progress Bar */}
@@ -235,35 +177,65 @@ export default function PantryQuizScreen({ navigation, route }) {
           <View style={[styles.progressFill, { width: `${progress}%` }]} />
         </View>
         <Text style={styles.progressText}>
-          {currentQuestionIndex + 1} of {quizData.questions.length}
+          {currentQuestion + 1} of {QUIZ_QUESTIONS.length}
         </Text>
       </View>
 
-      {/* Question */}
-      <View style={styles.content}>
-        {renderQuestion()}
-      </View>
-
-      {/* Bottom buttons */}
-      <View style={styles.bottomButtons}>
-        <TouchableOpacity 
-          style={styles.skipButton} 
-          onPress={handleSkip}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.skipButtonText}>Skip</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.nextButton, selectedItems.length === 0 && styles.nextButtonDisabled]} 
-          onPress={handleNext}
-          disabled={selectedItems.length === 0}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.nextButtonText}>
-            {currentQuestionIndex === quizData.questions.length - 1 ? 'Complete' : 'Next'}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.questionContainer}>
+          <Text style={styles.questionIcon}>{currentQuestionData.icon}</Text>
+          <Text style={styles.questionTitle}>{currentQuestionData.title}</Text>
+          <Text style={styles.questionSubtitle}>
+            Select the items you currently have in your pantry
           </Text>
-          <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
-        </TouchableOpacity>
+        </View>
+
+        <View style={styles.itemsGrid}>
+          {currentQuestionData.items.map((item, index) => {
+            const isSelected = selectedItems.find(i => i.name === item.name);
+            return (
+              <TouchableOpacity
+                key={index}
+                style={[styles.itemCard, isSelected && styles.itemCardSelected]}
+                onPress={() => handleItemToggle(item)}
+              >
+                <Text style={styles.itemName}>{item.name}</Text>
+                {isSelected && (
+                  <Ionicons 
+                    name="checkmark-circle" 
+                    size={20} 
+                    color={COLORS.primary} 
+                    style={styles.itemCheckmark}
+                  />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
+
+      {/* Navigation Buttons */}
+      <View style={styles.footer}>
+        <View style={styles.navigationButtons}>
+          {currentQuestion > 0 && (
+            <Button
+              title="Back"
+              onPress={handleBack}
+              style={[styles.navButton, styles.backNavButton]}
+            />
+          )}
+          <Button
+            title={currentQuestion === QUIZ_QUESTIONS.length - 1 ? 'Complete Quiz' : 'Next'}
+            onPress={handleNext}
+            style={[styles.navButton, styles.nextNavButton]}
+          />
+        </View>
+        
+        {selectedItems.length > 0 && (
+          <Text style={styles.selectionCount}>
+            {selectedItems.length} item{selectedItems.length !== 1 ? 's' : ''} selected
+          </Text>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -272,213 +244,127 @@ export default function PantryQuizScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+    backgroundColor: 'white',
   },
   backButton: {
-    padding: 8,
+    padding: SPACING.xs,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
+    ...TYPOGRAPHY.h3,
+    fontWeight: 'bold',
   },
-  headerSpacer: {
-    width: 40,
+  placeholder: {
+    width: 32,
   },
   progressContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: 'white',
   },
   progressBar: {
-    height: 8,
+    height: 4,
     backgroundColor: COLORS.border,
-    borderRadius: 4,
-    overflow: 'hidden',
+    borderRadius: 2,
+    marginBottom: SPACING.xs,
   },
   progressFill: {
     height: '100%',
     backgroundColor: COLORS.primary,
-    borderRadius: 4,
+    borderRadius: 2,
   },
   progressText: {
-    fontSize: 14,
+    ...TYPOGRAPHY.caption,
     color: COLORS.textSecondary,
     textAlign: 'center',
-    marginTop: 8,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
+    padding: SPACING.md,
   },
   questionContainer: {
-    flex: 1,
-    paddingVertical: 20,
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
   },
-  questionText: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
+  questionIcon: {
+    fontSize: 48,
+    marginBottom: SPACING.sm,
+  },
+  questionTitle: {
+    ...TYPOGRAPHY.h2,
+    fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 32,
+    marginBottom: SPACING.xs,
   },
-  searchContainer: {
+  questionSubtitle: {
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  itemsGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 16,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 16,
-    color: COLORS.textPrimary,
-  },
-  actionButtons: {
-    flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 16,
   },
-  actionButton: {
-    backgroundColor: COLORS.background,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  actionButtonText: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    fontWeight: '500',
-  },
-  checkboxList: {
-    flex: 1,
-  },
-  checkboxItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: COLORS.white,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  checkboxItemSelected: {
-    backgroundColor: COLORS.primary + '10',
-    borderColor: COLORS.primary,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 4,
+  itemCard: {
+    width: '48%',
+    backgroundColor: 'white',
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
     borderWidth: 2,
     borderColor: COLORS.border,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+    position: 'relative',
+    ...SHADOWS.sm,
   },
-  checkboxSelected: {
-    backgroundColor: COLORS.primary,
+  itemCardSelected: {
     borderColor: COLORS.primary,
+    backgroundColor: COLORS.primaryLight,
   },
-  checkboxText: {
-    fontSize: 16,
-    color: COLORS.textPrimary,
-    flex: 1,
-  },
-  checkboxTextSelected: {
-    color: COLORS.primary,
+  itemName: {
+    ...TYPOGRAPHY.body,
     fontWeight: '500',
-  },
-  otherInputContainer: {
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  otherInput: {
-    backgroundColor: COLORS.background,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: COLORS.textPrimary,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  selectionCount: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
     textAlign: 'center',
-    marginTop: 16,
   },
-  bottomButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+  itemCheckmark: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+  },
+  footer: {
+    padding: SPACING.md,
+    backgroundColor: 'white',
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    gap: 12,
   },
-  skipButton: {
+  navigationButtons: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#EF4444',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+  },
+  navButton: {
     flex: 1,
+    marginHorizontal: SPACING.xs,
   },
-  skipButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#EF4444',
+  backNavButton: {
+    backgroundColor: COLORS.background,
   },
-  nextButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    flex: 1,
+  nextNavButton: {
+    // Uses default primary color
   },
-  nextButtonDisabled: {
-    backgroundColor: COLORS.border,
-  },
-  nextButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.white,
-    marginRight: 8,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 18,
+  selectionCount: {
+    ...TYPOGRAPHY.caption,
     color: COLORS.textSecondary,
-    marginTop: 16,
+    textAlign: 'center',
   },
 }); 
